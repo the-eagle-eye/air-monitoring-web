@@ -1,0 +1,10 @@
+from shared.models.base import Base  # noqa: F401
+from app.models.datalogger import Datalogger  # noqa: F401
+from app.models.usuario import Usuario  # noqa: F401
+from app.models.proveedor_calibracion import ProveedorCalibracion  # noqa: F401
+from app.models.repuesto import Repuesto  # noqa: F401
+from app.models.incidencia import Incidencia  # noqa: F401
+from app.models.mantenimiento import MantenimientoCorrectivo  # noqa: F401
+from app.models.mantenimiento import MantenimientoRepuesto  # noqa: F401
+from app.models.calibracion import Calibracion  # noqa: F401
+from app.models.archivo_adjunto import ArchivoAdjunto  # noqa: F401

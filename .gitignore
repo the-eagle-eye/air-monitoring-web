@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.Python
+env/
+venv/
+.venv/
+
+# ML artifacts (large binary model files)
+*.pkl
+*.joblib
+# ML artifact backups
+ml_artifacts_backup_*/
+
+# Node
+node_modules/
+.next/
+out/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude Code
+.claude/
+CLAUDE.md
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+coverage/
+
+# Docker
+*.log
+
+# OS
+Thumbs.db
+
+# Files
+datasets/
+dataset/
+logs/
+.claude
+
+# Docs (internal/specs - not for repo)
+air-monitoring-spec.md
+BACKLOG_POST_MVP.md
+GUIA_DESPLIEGUE_AWS.md

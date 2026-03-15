@@ -1,0 +1,55 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main, dev, qa]
+  pull_request:
+    branches: [main, dev, qa]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api-gateway, iot-service, ml-service, ops-service]
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: airmon
+          POSTGRES_PASSWORD: airmon123
+          POSTGRES_DB: airmonitoring
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          cd services/${{ matrix.service }}
+          pip install -r requirements-dev.txt
+
+      - name: Lint with flake8
+        run: |
+          cd services/${{ matrix.service }}
+          flake8 app/ tests/
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql://airmon:airmon123@localhost:5432/airmonitoring
+          PYTHONPATH: ${{ github.workspace }}:${{ github.workspace }}/services/${{ matrix.service }}
+        run: |
+          cd services/${{ matrix.service }}
+          pytest -v
