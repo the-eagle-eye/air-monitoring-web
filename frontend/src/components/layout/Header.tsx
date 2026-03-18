@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { useAuth } from "@/lib/auth";
 
 const navItems = [
   { label: "Inicio", href: "/" },
@@ -108,8 +109,15 @@ function OperacionesDropdown() {
   );
 }
 
+const ROL_LABEL: Record<string, string> = {
+  administrador: "Admin",
+  tecnico: "Tecnico",
+  coordinador: "Coordinador",
+};
+
 export default function Header() {
   const pathname = usePathname();
+  const { user, isAuthenticated, logout } = useAuth();
 
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -150,6 +158,25 @@ export default function Header() {
             );
           })}
         </nav>
+
+        {isAuthenticated && user && (
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                {user.nombre} {user.apellido}
+              </div>
+              <div className="text-xs text-zinc-500">
+                {ROL_LABEL[user.rol] ?? user.rol}
+              </div>
+            </div>
+            <button
+              onClick={logout}
+              className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              Salir
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );

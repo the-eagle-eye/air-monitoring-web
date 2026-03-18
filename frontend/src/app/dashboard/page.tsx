@@ -1,14 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { usePolling } from '@/hooks/usePolling';
+import HealthSemaforo from '@/components/dashboard/HealthSemaforo';
 import KpiCards from '@/components/dashboard/KpiCards';
 import EquipoGrid from '@/components/dashboard/EquipoGrid';
 import RiskDistributionChart from '@/components/dashboard/RiskDistributionChart';
+import PredictionTrendsChart from '@/components/dashboard/PredictionTrendsChart';
 import SensorTrendsChart from '@/components/dashboard/SensorTrendsChart';
 import RecentAlerts from '@/components/dashboard/RecentAlerts';
+import IncidenciasSummary from '@/components/dashboard/IncidenciasSummary';
+import ProximasCalibraciones from '@/components/dashboard/ProximasCalibraciones';
 import { fetchDashboardData, fetchEquipoLecturas } from '@/lib/api/dashboard';
+import { fetchPredicciones } from '@/lib/api/predicciones';
+import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
 import type { DashboardData, KpiData, RiskDistribution } from '@/types/dashboard';
 import type { LecturaIoT } from '@/types/lectura';
+import type { Prediccion } from '@/types/prediccion';
+import type { Incidencia, CalibracionOps } from '@/types/ops';
 
 function computeKpis(data: DashboardData): KpiData {
   const predictions = Object.values(data.latestPredictions);
@@ -49,30 +58,68 @@ export default function DashboardPage() {
   const [selectedEquipo, setSelectedEquipo] = useState('');
   const [lecturas, setLecturas] = useState<LecturaIoT[]>([]);
   const [lecturasLoading, setLecturasLoading] = useState(false);
+  const [predicciones, setPredicciones] = useState<Prediccion[]>([]);
+  const [prediccionesLoading, setPrediccionesLoading] = useState(false);
+  const [openIncidencias, setOpenIncidencias] = useState<Incidencia[]>([]);
+  const [pendingCalibraciones, setPendingCalibraciones] = useState<CalibracionOps[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  useEffect(() => {
+  const selectedEquipoRef = useRef(selectedEquipo);
+  selectedEquipoRef.current = selectedEquipo;
+
+  const loadDashboard = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     fetchDashboardData()
       .then((data) => {
         setDashData(data);
-        if (data.equipos.length > 0) {
+        if (!selectedEquipoRef.current && data.equipos.length > 0) {
           setSelectedEquipo(data.equipos[0].device_id);
         }
+        setLastUpdated(new Date());
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+      .catch((err) => { if (!silent) setError(err.message); })
+      .finally(() => { if (!silent) setLoading(false); });
+
+    Promise.all([
+      fetchIncidencias({ tipo: 'correctiva', estado: 'pendiente', page_size: 50 }),
+      fetchIncidencias({ tipo: 'correctiva', estado: 'en_ejecucion', page_size: 50 }),
+    ])
+      .then(([pend, ejec]) => setOpenIncidencias([...pend.items, ...ejec.items]))
+      .catch(() => {});
+
+    fetchCalibracionesOps({ page_size: 100 })
+      .then((res) => setPendingCalibraciones(res.items.filter((c) => !c.fecha_calibracion && c.incidencia_estado !== 'finalizado' && c.incidencia_estado !== 'cancelado')))
+      .catch(() => {});
   }, []);
+
+  const loadEquipoData = useCallback((silent = false) => {
+    const equipo = selectedEquipoRef.current;
+    if (!equipo) return;
+    if (!silent) setLecturasLoading(true);
+    fetchEquipoLecturas(equipo)
+      .then(setLecturas)
+      .catch(() => setLecturas([]))
+      .finally(() => { if (!silent) setLecturasLoading(false); });
+
+    if (!silent) setPrediccionesLoading(true);
+    fetchPredicciones(equipo, 1, 200)
+      .then((res) => setPredicciones(res.items))
+      .catch(() => setPredicciones([]))
+      .finally(() => { if (!silent) setPrediccionesLoading(false); });
+  }, []);
+
+  useEffect(() => { loadDashboard(); }, [loadDashboard]);
 
   useEffect(() => {
     if (!selectedEquipo) {
       setLecturas([]);
+      setPredicciones([]);
       return;
     }
-    setLecturasLoading(true);
-    fetchEquipoLecturas(selectedEquipo)
-      .then(setLecturas)
-      .catch(() => setLecturas([]))
-      .finally(() => setLecturasLoading(false));
-  }, [selectedEquipo]);
+    loadEquipoData();
+  }, [selectedEquipo, loadEquipoData]);
+
+  usePolling(() => { loadDashboard(true); loadEquipoData(true); }, 30_000);
 
   if (loading) {
     return (
@@ -105,9 +152,22 @@ export default function DashboardPage() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 px-4 py-8">
-      <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-        Dashboard de Monitoreo
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+          Dashboard de Monitoreo
+        </h1>
+        {lastUpdated && (
+          <span className="text-xs text-zinc-400">
+            Actualizado: {lastUpdated.toLocaleTimeString()}
+          </span>
+        )}
+      </div>
+
+      <HealthSemaforo
+        predictions={dashData.latestPredictions}
+        totalEquipos={dashData.equipos.length}
+        incidenciasAbiertas={openIncidencias}
+      />
 
       <KpiCards data={kpis} />
 
@@ -120,6 +180,19 @@ export default function DashboardPage() {
         <RiskDistributionChart data={riskDist} />
         <RecentAlerts alertas={dashData.alertas} />
       </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <IncidenciasSummary incidencias={openIncidencias} />
+        <ProximasCalibraciones calibraciones={pendingCalibraciones} />
+      </div>
+
+      <PredictionTrendsChart
+        predicciones={predicciones}
+        loading={prediccionesLoading}
+        selectedEquipo={selectedEquipo}
+        equipoOptions={equipoOptions}
+        onEquipoChange={setSelectedEquipo}
+      />
 
       <SensorTrendsChart
         lecturas={lecturas}

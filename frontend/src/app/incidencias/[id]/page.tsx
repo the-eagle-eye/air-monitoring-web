@@ -1,90 +1,168 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   fetchIncidencia,
   updateIncidencia,
   submitMantenimiento,
   fetchUsuarios,
+  fetchRepuestos,
 } from '@/lib/api/ops';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Badge from '@/components/ui/Badge';
-import type { Incidencia, Usuario, Mantenimiento } from '@/types/ops';
+import type { Incidencia, Usuario, Repuesto } from '@/types/ops';
 
 export default function IncidenciaDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const id = Number(params.id);
+  const requestedMode = searchParams.get('mode');
 
   const [incidencia, setIncidencia] = useState<Incidencia | null>(null);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // Edit state
   const [editEstado, setEditEstado] = useState('');
   const [editResponsable, setEditResponsable] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   // Mantenimiento form
   const [mtoDiagnostico, setMtoDiagnostico] = useState('');
   const [mtoAcciones, setMtoAcciones] = useState('');
   const [mtoConclusion, setMtoConclusion] = useState('');
-  const [mtoSubmitting, setMtoSubmitting] = useState(false);
-  const [mtoSubmitted, setMtoSubmitted] = useState(false);
-  const [mtoError, setMtoError] = useState<string | null>(null);
+  const [selectedRepuestoIds, setSelectedRepuestoIds] = useState<number[]>([]);
+  const [repuestosOpen, setRepuestosOpen] = useState(false);
+  const [adjuntos, setAdjuntos] = useState<{ filename: string; file_url: string }[]>([]);
+
+  // Save state
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<{ text: string; isError: boolean } | null>(null);
+
+  const repuestosRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    Promise.all([fetchIncidencia(id), fetchUsuarios()])
-      .then(([inc, users]) => {
+    Promise.all([fetchIncidencia(id), fetchUsuarios(), fetchRepuestos()])
+      .then(([inc, users, reps]) => {
         setIncidencia(inc);
         setEditEstado(inc.estado);
         setEditResponsable(inc.responsable_id ? String(inc.responsable_id) : '');
         setUsuarios(users);
+        setRepuestos(reps);
+        // Pre-populate mantenimiento fields if data exists
+        if (inc.mantenimiento_correctivo) {
+          setMtoDiagnostico(inc.mantenimiento_correctivo.diagnostico ?? '');
+          setMtoAcciones(inc.mantenimiento_correctivo.acciones_realizadas ?? '');
+          setMtoConclusion(inc.mantenimiento_correctivo.conclusion ?? '');
+        }
       })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Close repuestos dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (repuestosRef.current && !repuestosRef.current.contains(e.target as Node)) {
+        setRepuestosOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Determine mode
+  const isFinalizado = incidencia?.estado === 'finalizado' || incidencia?.estado === 'cancelado';
+  const isEditMode = requestedMode === 'edit' && !isFinalizado;
+  const hasMantenimiento = !!incidencia?.mantenimiento_correctivo;
+
   async function handleSave() {
     if (!incidencia) return;
+
+    // Validate responsable
+    if (!editResponsable) {
+      setSaveMsg({ text: 'Responsable es obligatorio', isError: true });
+      return;
+    }
+
+    // Validate mantenimiento fields if no existing mantenimiento
+    if (!hasMantenimiento) {
+      if (!mtoDiagnostico.trim() || !mtoAcciones.trim() || !mtoConclusion.trim()) {
+        setSaveMsg({ text: 'Diagnostico, Acciones Realizadas y Conclusion son obligatorios', isError: true });
+        return;
+      }
+    }
+
     setSaving(true);
     setSaveMsg(null);
+
     try {
+      // 1. Update incidencia (estado + responsable)
       const updated = await updateIncidencia(id, {
         estado: editEstado !== incidencia.estado ? editEstado : undefined,
         responsable_id: editResponsable ? Number(editResponsable) : undefined,
       });
-      setIncidencia(updated);
-      setSaveMsg('Cambios guardados');
+
+      // 2. Submit mantenimiento if not already exists
+      if (!hasMantenimiento) {
+        await submitMantenimiento(id, {
+          diagnostico: mtoDiagnostico,
+          acciones_realizadas: mtoAcciones,
+          conclusion: mtoConclusion,
+          fecha_ejecucion: new Date().toISOString(),
+          repuesto_ids: selectedRepuestoIds,
+          adjuntos: adjuntos.filter((a) => a.filename && a.file_url),
+        });
+      }
+
+      // Refresh data
+      const refreshed = await fetchIncidencia(id);
+      setIncidencia(refreshed);
+      setEditEstado(refreshed.estado);
+      setEditResponsable(refreshed.responsable_id ? String(refreshed.responsable_id) : '');
+      if (refreshed.mantenimiento_correctivo) {
+        setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
+        setMtoAcciones(refreshed.mantenimiento_correctivo.acciones_realizadas ?? '');
+        setMtoConclusion(refreshed.mantenimiento_correctivo.conclusion ?? '');
+      }
+
+      setSaveMsg({ text: 'Cambios guardados exitosamente', isError: false });
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
-      setSaveMsg(err instanceof Error ? err.message : 'Error al guardar');
+      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al guardar', isError: true });
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleSubmitMantenimiento(e: React.FormEvent) {
-    e.preventDefault();
-    setMtoSubmitting(true);
-    setMtoError(null);
-    try {
-      await submitMantenimiento(id, {
-        diagnostico: mtoDiagnostico || undefined,
-        acciones_realizadas: mtoAcciones || undefined,
-        conclusion: mtoConclusion || undefined,
-      });
-      setMtoSubmitted(true);
-    } catch (err) {
-      setMtoError(err instanceof Error ? err.message : 'Error al registrar');
-    } finally {
-      setMtoSubmitting(false);
-    }
+  function toggleRepuesto(repId: number) {
+    setSelectedRepuestoIds((prev) =>
+      prev.includes(repId) ? prev.filter((r) => r !== repId) : [...prev, repId],
+    );
   }
+
+  function addAdjunto() {
+    setAdjuntos((prev) => [...prev, { filename: '', file_url: '' }]);
+  }
+
+  function updateAdjunto(index: number, field: 'filename' | 'file_url', value: string) {
+    setAdjuntos((prev) => prev.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+  }
+
+  function removeAdjunto(index: number) {
+    setAdjuntos((prev) => prev.filter((_, i) => i !== index));
+  }
+
+  // Group repuestos by category
+  const repuestosByCategoria = repuestos.reduce<Record<string, Repuesto[]>>((acc, r) => {
+    if (!acc[r.categoria]) acc[r.categoria] = [];
+    acc[r.categoria].push(r);
+    return acc;
+  }, {});
 
   if (loading) {
     return <div className="mx-auto max-w-4xl px-4 py-12 text-center text-zinc-400">Cargando...</div>;
@@ -101,14 +179,35 @@ export default function IncidenciaDetailPage() {
   }
 
   const responsable = usuarios.find((u) => u.id === incidencia.responsable_id);
+  const mto = incidencia.mantenimiento_correctivo;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
+      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-          Incidencia #{incidencia.id}
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+            Incidencia #{incidencia.id}
+          </h1>
+          {isEditMode ? (
+            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+              Editando
+            </span>
+          ) : (
+            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+              Solo lectura
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
+          {!isEditMode && !isFinalizado && (
+            <Link
+              href={`/incidencias/${id}?mode=edit`}
+              className="rounded-md bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600"
+            >
+              Editar
+            </Link>
+          )}
           <Link
             href={`/equipos/${incidencia.device_id}`}
             className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
@@ -136,10 +235,7 @@ export default function IncidenciaDetailPage() {
           <div>
             <dt className="text-xs font-medium uppercase text-zinc-500">Tipo</dt>
             <dd className="mt-0.5">
-              <Badge
-                label={incidencia.tipo === 'correctiva' ? 'Correctiva' : 'Calibracion'}
-                variant={incidencia.tipo === 'correctiva' ? 'danger' : 'info'}
-              />
+              <Badge label="Correctiva" variant="danger" />
             </dd>
           </div>
           <div>
@@ -158,9 +254,47 @@ export default function IncidenciaDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Responsable</dt>
-            <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {responsable ? `${responsable.nombre} ${responsable.apellido}` : 'Sin asignar'}
+            <dt className="text-xs font-medium uppercase text-zinc-500">Estado</dt>
+            <dd className="mt-0.5">
+              {isEditMode ? (
+                <select
+                  value={editEstado}
+                  onChange={(e) => setEditEstado(e.target.value)}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                >
+                  <option value="pendiente">Pendiente</option>
+                  <option value="en_ejecucion">En Ejecucion</option>
+                  <option value="finalizado">Finalizado</option>
+                  <option value="cancelado">Cancelado</option>
+                </select>
+              ) : (
+                <StatusBadge status={incidencia.estado} />
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">
+              Responsable {isEditMode && <span className="text-red-500">*</span>}
+            </dt>
+            <dd className="mt-0.5">
+              {isEditMode ? (
+                <select
+                  value={editResponsable}
+                  onChange={(e) => setEditResponsable(e.target.value)}
+                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                >
+                  <option value="" disabled>Seleccionar responsable</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nombre} {u.apellido}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <span className="text-sm text-zinc-900 dark:text-zinc-100">
+                  {responsable ? `${responsable.nombre} ${responsable.apellido}` : 'Sin asignar'}
+                </span>
+              )}
             </dd>
           </div>
           <div>
@@ -169,151 +303,268 @@ export default function IncidenciaDetailPage() {
               {new Date(incidencia.created_at).toLocaleString()}
             </dd>
           </div>
-          {incidencia.updated_at && (
-            <div>
-              <dt className="text-xs font-medium uppercase text-zinc-500">Actualizada</dt>
-              <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-                {new Date(incidencia.updated_at).toLocaleString()}
-              </dd>
-            </div>
-          )}
         </div>
 
         {incidencia.descripcion && (
-          <div className="mb-4">
+          <div>
             <dt className="text-xs font-medium uppercase text-zinc-500">Descripcion</dt>
             <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
               {incidencia.descripcion}
             </dd>
           </div>
         )}
-
-        {/* Editar estado y responsable */}
-        <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-800 dark:text-zinc-200">
-            Actualizar
-          </h3>
-          <div className="flex flex-wrap items-end gap-3">
-            <div>
-              <label className="mb-1 block text-xs text-zinc-500">Estado</label>
-              <select
-                value={editEstado}
-                onChange={(e) => setEditEstado(e.target.value)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-              >
-                <option value="pendiente">Pendiente</option>
-                <option value="en_ejecucion">En Ejecucion</option>
-                <option value="finalizado">Finalizado</option>
-                <option value="cancelado">Cancelado</option>
-              </select>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs text-zinc-500">Responsable</label>
-              <select
-                value={editResponsable}
-                onChange={(e) => setEditResponsable(e.target.value)}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-              >
-                <option value="">Sin asignar</option>
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nombre} {u.apellido}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="rounded-md bg-blue-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? 'Guardando...' : 'Guardar Cambios'}
-            </button>
-            {saveMsg && (
-              <span className="text-sm text-green-600">{saveMsg}</span>
-            )}
-          </div>
-        </div>
       </div>
 
-      {/* Seccion Mantenimiento Correctivo */}
-      {incidencia.tipo === 'correctiva' && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-          <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-white">
-            Mantenimiento Correctivo
-          </h2>
+      {/* Mantenimiento Correctivo */}
+      <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
+        <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-white">
+          Mantenimiento Correctivo
+        </h2>
 
-          {mtoSubmitted ? (
-            <div className="rounded-md bg-green-50 p-4 text-sm text-green-700">
-              Mantenimiento registrado exitosamente.
+        {/* Read-only mode OR has existing mantenimiento */}
+        {(!isEditMode || hasMantenimiento) ? (
+          <div className="space-y-4">
+            {mto ? (
+              <>
+                <div>
+                  <dt className="text-xs font-medium uppercase text-zinc-500">Diagnostico</dt>
+                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                    {mto.diagnostico || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase text-zinc-500">Acciones Realizadas</dt>
+                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                    {mto.acciones_realizadas || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase text-zinc-500">Conclusion</dt>
+                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                    {mto.conclusion || '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase text-zinc-500">Fecha de Ejecucion</dt>
+                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {mto.fecha_ejecucion
+                      ? new Date(mto.fecha_ejecucion).toLocaleDateString()
+                      : '—'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase text-zinc-500">Repuestos</dt>
+                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {mto.repuestos && mto.repuestos.length > 0 ? (
+                      <ul className="list-disc pl-5 space-y-0.5">
+                        {mto.repuestos.map((r) => (
+                          <li key={r.id}>
+                            {r.nombre}{' '}
+                            <span className="text-xs text-zinc-400">({r.categoria})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium uppercase text-zinc-500">Adjuntos (fotos)</dt>
+                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+                    {mto.adjuntos && mto.adjuntos.length > 0 ? (
+                      <ul className="list-disc pl-5 space-y-0.5">
+                        {mto.adjuntos.map((a) => (
+                          <li key={a.id}>
+                            <a
+                              href={a.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                              {a.filename}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-zinc-400">
+                No se ha registrado mantenimiento correctivo aun.
+              </p>
+            )}
+          </div>
+        ) : (
+          /* Edit mode WITHOUT existing mantenimiento */
+          <div className="space-y-4">
+            {/* Diagnostico */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Diagnostico <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={mtoDiagnostico}
+                onChange={(e) => setMtoDiagnostico(e.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+              />
             </div>
-          ) : (
-            <form onSubmit={handleSubmitMantenimiento} className="space-y-4">
-              {mtoError && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
-                  {mtoError}
+
+            {/* Acciones Realizadas */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Acciones Realizadas <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={mtoAcciones}
+                onChange={(e) => setMtoAcciones(e.target.value)}
+                rows={3}
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+              />
+            </div>
+
+            {/* Conclusion */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Conclusion <span className="text-red-500">*</span>
+              </label>
+              <textarea
+                value={mtoConclusion}
+                onChange={(e) => setMtoConclusion(e.target.value)}
+                rows={2}
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+              />
+            </div>
+
+            {/* Fecha de Ejecucion (readonly) */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Fecha de Ejecucion
+              </label>
+              <input
+                type="date"
+                value={new Date().toISOString().split('T')[0]}
+                readOnly
+                className="w-full rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm cursor-not-allowed dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+              />
+            </div>
+
+            {/* Repuestos multi-select */}
+            <div ref={repuestosRef} className="relative">
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Repuestos
+              </label>
+              <button
+                type="button"
+                onClick={() => setRepuestosOpen((prev) => !prev)}
+                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-left text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+              >
+                {selectedRepuestoIds.length === 0
+                  ? 'Seleccionar repuestos...'
+                  : `${selectedRepuestoIds.length} repuesto${selectedRepuestoIds.length > 1 ? 's' : ''} seleccionado${selectedRepuestoIds.length > 1 ? 's' : ''}`}
+                <span className="float-right">{repuestosOpen ? '\u25B2' : '\u25BC'}</span>
+              </button>
+
+              {repuestosOpen && (
+                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-zinc-300 bg-white shadow-lg dark:border-zinc-600 dark:bg-zinc-800">
+                  {Object.entries(repuestosByCategoria).map(([cat, items]) => (
+                    <div key={cat}>
+                      <div className="sticky top-0 bg-zinc-100 px-3 py-1.5 text-xs font-bold uppercase text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                        {cat}
+                      </div>
+                      {items.map((r) => (
+                        <label
+                          key={r.id}
+                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-200"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={selectedRepuestoIds.includes(r.id)}
+                            onChange={() => toggleRepuesto(r.id)}
+                            className="rounded border-zinc-300 dark:border-zinc-500"
+                          />
+                          {r.nombre}
+                        </label>
+                      ))}
+                    </div>
+                  ))}
+                  {repuestos.length === 0 && (
+                    <div className="px-3 py-2 text-sm text-zinc-400">No hay repuestos disponibles</div>
+                  )}
                 </div>
               )}
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Diagnostico
-                </label>
-                <textarea
-                  value={mtoDiagnostico}
-                  onChange={(e) => setMtoDiagnostico(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Acciones Realizadas
-                </label>
-                <textarea
-                  value={mtoAcciones}
-                  onChange={(e) => setMtoAcciones(e.target.value)}
-                  rows={3}
-                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Conclusion
-                </label>
-                <textarea
-                  value={mtoConclusion}
-                  onChange={(e) => setMtoConclusion(e.target.value)}
-                  rows={2}
-                  className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                />
+            </div>
+
+            {/* Adjuntos */}
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Adjuntos (fotos)
+              </label>
+              <div className="space-y-2">
+                {adjuntos.map((a, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      placeholder="Nombre del archivo"
+                      value={a.filename}
+                      onChange={(e) => updateAdjunto(i, 'filename', e.target.value)}
+                      className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                    />
+                    <input
+                      type="text"
+                      placeholder="URL del archivo"
+                      value={a.file_url}
+                      onChange={(e) => updateAdjunto(i, 'file_url', e.target.value)}
+                      className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeAdjunto(i)}
+                      className="text-sm text-red-400 hover:text-red-300"
+                    >
+                      Eliminar
+                    </button>
+                  </div>
+                ))}
               </div>
               <button
-                type="submit"
-                disabled={mtoSubmitting}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                type="button"
+                onClick={addAdjunto}
+                className="mt-2 rounded-md border border-dashed border-zinc-400 px-3 py-1.5 text-sm text-zinc-600 hover:border-zinc-500 hover:text-zinc-700 dark:border-zinc-500 dark:text-zinc-400 dark:hover:border-zinc-400 dark:hover:text-zinc-300"
               >
-                {mtoSubmitting ? 'Registrando...' : 'Registrar Mantenimiento'}
+                + Agregar Adjunto
               </button>
-            </form>
-          )}
-        </div>
-      )}
+            </div>
+          </div>
+        )}
+      </div>
 
-      {/* Link a calibracion si tipo=calibracion */}
-      {incidencia.tipo === 'calibracion' && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-          <h2 className="mb-3 text-lg font-bold text-zinc-900 dark:text-white">
-            Calibracion Asociada
-          </h2>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400">
-            Esta incidencia es de tipo calibracion. Puede ver y gestionar las calibraciones desde la{' '}
-            <Link
-              href={`/calibraciones?device_id=${incidencia.device_id}`}
-              className="font-medium text-blue-600 hover:underline"
-            >
-              pagina de calibraciones
-            </Link>.
-          </p>
+      {/* Save button (edit mode only) */}
+      {isEditMode && (
+        <div className="mt-6 flex items-center gap-3">
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? 'Guardando...' : 'Guardar'}
+          </button>
+          <Link
+            href={`/incidencias/${id}`}
+            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+          >
+            Cancelar
+          </Link>
+          {saveMsg && (
+            <span className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}>
+              {saveMsg.text}
+            </span>
+          )}
         </div>
       )}
     </div>

@@ -11,7 +11,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     Promise.allSettled(
       equipos.map((eq) => fetchPredicciones(eq.device_id, 1, 1))
     ),
-    fetchAlertas({ page: 1, page_size: 50 }),
+    fetchAlertas({ estado: 'activa', page: 1, page_size: 50 }),
   ]);
 
   const latestPredictions: Record<string, Prediccion> = {};

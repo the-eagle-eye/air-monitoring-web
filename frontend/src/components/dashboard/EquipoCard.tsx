@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Equipo } from '@/types/lectura';
 import type { Prediccion } from '@/types/prediccion';
 import RiskBadge from '@/components/ui/RiskBadge';
@@ -51,8 +52,9 @@ export default function EquipoCard({ equipo, prediction }: EquipoCardProps) {
     : 0;
 
   return (
-    <div
-      className={`rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 border-l-4 ${borderColor} p-4 transition-shadow hover:shadow-md`}
+    <Link
+      href={`/equipos/${equipo.device_id}`}
+      className={`flex h-full flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 border-l-4 ${borderColor} p-4 transition-shadow hover:shadow-md`}
     >
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 text-zinc-400 dark:text-zinc-500">
@@ -110,10 +112,10 @@ export default function EquipoCard({ equipo, prediction }: EquipoCardProps) {
       )}
 
       {!prediction && (
-        <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <div className="mt-3 flex flex-1 items-center border-t border-zinc-100 pt-3 dark:border-zinc-800">
           <p className="text-xs text-zinc-400">Sin predicciones disponibles</p>
         </div>
       )}
-    </div>
+    </Link>
   );
 }

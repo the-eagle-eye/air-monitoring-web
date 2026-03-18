@@ -8,6 +8,7 @@ export interface Incidencia {
   responsable_id: number | null;
   created_at: string;
   updated_at: string | null;
+  mantenimiento_correctivo?: Mantenimiento | null;
 }
 
 export interface IncidenciaListResponse {
@@ -19,12 +20,14 @@ export interface IncidenciaListResponse {
 
 export interface CalibracionOps {
   id: number;
-  incidencia_id: number;
+  incidencia_id: number | null;
   device_id: string;
   fecha_calibracion: string | null;
   nota: string | null;
   certificado_url: string | null;
   proveedor_id: number | null;
+  estado: string;
+  incidencia_estado: string | null;
   created_at: string;
 }
 
@@ -35,6 +38,18 @@ export interface CalibracionListResponse {
   page_size: number;
 }
 
+export interface RepuestoUsado {
+  id: number;
+  nombre: string;
+  categoria: string;
+}
+
+export interface AdjuntoResponse {
+  id: number;
+  filename: string;
+  file_url: string;
+}
+
 export interface Mantenimiento {
   id: number;
   incidencia_id: number;
@@ -42,6 +57,8 @@ export interface Mantenimiento {
   acciones_realizadas: string | null;
   conclusion: string | null;
   fecha_ejecucion: string | null;
+  repuestos: RepuestoUsado[];
+  adjuntos: AdjuntoResponse[];
   created_at: string;
 }
 
@@ -58,4 +75,17 @@ export interface Proveedor {
   id: number;
   nombre: string;
   estado: string;
+}
+
+export interface Repuesto {
+  id: number;
+  nombre: string;
+  categoria: string;
+  estado: string;
+  created_at: string;
+}
+
+export interface AdjuntoInput {
+  filename: string;
+  file_url: string;
 }

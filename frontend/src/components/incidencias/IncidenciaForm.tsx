@@ -46,12 +46,17 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
     setSubmitting(true);
     setError(null);
     try {
+      if (!form.responsable_id) {
+        setError('Responsable es obligatorio');
+        setSubmitting(false);
+        return;
+      }
       await onSubmit({
         device_id: form.device_id,
         tipo: form.tipo,
         prioridad: form.prioridad,
         descripcion: form.descripcion || undefined,
-        responsable_id: form.responsable_id ? Number(form.responsable_id) : undefined,
+        responsable_id: Number(form.responsable_id),
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear');
@@ -116,16 +121,17 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
 
         <div>
           <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Responsable
+            Responsable <span className="text-red-500">*</span>
           </label>
           <select
             value={form.responsable_id}
             onChange={(e) =>
               setForm((prev) => ({ ...prev, responsable_id: e.target.value }))
             }
+            required
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
           >
-            <option value="">Sin asignar</option>
+            <option value="" disabled>Seleccionar responsable</option>
             {usuarios.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.nombre} {u.apellido} ({u.rol})

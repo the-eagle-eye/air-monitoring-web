@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { usePolling } from '@/hooks/usePolling';
 import Link from 'next/link';
 import { fetchEquipos } from '@/lib/api/lecturas';
 import {
@@ -9,6 +10,7 @@ import {
   fetchProveedores,
 } from '@/lib/api/ops';
 import DataTable from '@/components/ui/DataTable';
+import StatusBadge from '@/components/ui/StatusBadge';
 import type { Equipo } from '@/types/lectura';
 import type { CalibracionOps, Proveedor } from '@/types/ops';
 
@@ -23,6 +25,7 @@ export default function CalibracionesPage() {
   const [showForm, setShowForm] = useState(false);
 
   const [filterDevice, setFilterDevice] = useState('');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const pageSize = 50;
 
   // Create form
@@ -30,6 +33,22 @@ export default function CalibracionesPage() {
   const [formNota, setFormNota] = useState('');
   const [formProveedor, setFormProveedor] = useState('');
   const [creating, setCreating] = useState(false);
+
+  const loadData = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
+    fetchCalibracionesOps({
+      device_id: filterDevice || undefined,
+      page,
+      page_size: pageSize,
+    })
+      .then((res) => {
+        setCalibraciones(res.items);
+        setTotal(res.total);
+        setLastUpdated(new Date());
+      })
+      .catch((err) => { if (!silent) setError(err.message); })
+      .finally(() => { if (!silent) setLoading(false); });
+  }, [filterDevice, page]);
 
   useEffect(() => {
     fetchEquipos().then((eqs) => {
@@ -39,25 +58,9 @@ export default function CalibracionesPage() {
     fetchProveedores().then(setProveedores).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterDevice, page]);
+  useEffect(() => { loadData(); }, [loadData]);
 
-  function loadData() {
-    setLoading(true);
-    fetchCalibracionesOps({
-      device_id: filterDevice || undefined,
-      page,
-      page_size: pageSize,
-    })
-      .then((res) => {
-        setCalibraciones(res.items);
-        setTotal(res.total);
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }
+  usePolling(() => loadData(true), 30_000);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -72,7 +75,7 @@ export default function CalibracionesPage() {
       setFormNota('');
       setFormProveedor('');
       setPage(1);
-      loadData();
+      loadData(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error al crear');
     } finally {
@@ -87,6 +90,11 @@ export default function CalibracionesPage() {
   const columns = [
     { key: 'id', header: 'ID' },
     { key: 'device_id', header: 'Equipo' },
+    {
+      key: 'estado',
+      header: 'Estado',
+      render: (item: CalibracionOps) => <StatusBadge status={item.estado} />,
+    },
     {
       key: 'fecha_calibracion',
       header: 'Fecha Calibracion',
@@ -144,12 +152,22 @@ export default function CalibracionesPage() {
           >
             Ver
           </Link>
-          <Link
-            href={`/incidencias/${item.incidencia_id}`}
-            className="rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400"
-          >
-            Incidencia
-          </Link>
+          {item.estado !== 'completada' && (
+            <Link
+              href={`/calibraciones/${item.id}?mode=edit`}
+              className="rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400"
+            >
+              Editar
+            </Link>
+          )}
+          {item.incidencia_id && (
+            <Link
+              href={`/incidencias/${item.incidencia_id}`}
+              className="rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-400"
+            >
+              Incidencia
+            </Link>
+          )}
         </div>
       ),
     },
@@ -158,9 +176,16 @@ export default function CalibracionesPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-          Calibraciones
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+            Calibraciones
+          </h1>
+          {lastUpdated && (
+            <span className="text-xs text-zinc-400">
+              Actualizado: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => setShowForm(!showForm)}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"

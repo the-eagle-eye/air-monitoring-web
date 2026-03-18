@@ -7,6 +7,7 @@ import type {
   Mantenimiento,
   Usuario,
   Proveedor,
+  Repuesto,
 } from '@/types/ops';
 
 // --- Incidencias ---
@@ -70,7 +71,9 @@ export async function submitMantenimiento(
     diagnostico?: string;
     acciones_realizadas?: string;
     conclusion?: string;
+    fecha_ejecucion?: string;
     repuesto_ids?: number[];
+    adjuntos?: { filename: string; file_url: string }[];
   },
 ): Promise<Mantenimiento> {
   return apiFetch<Mantenimiento>(
@@ -81,6 +84,13 @@ export async function submitMantenimiento(
       body: JSON.stringify(data),
     },
   );
+}
+
+// --- Repuestos ---
+
+export async function fetchRepuestos(categoria?: string): Promise<Repuesto[]> {
+  const qs = categoria ? `?categoria=${categoria}` : '';
+  return apiFetch<Repuesto[]>(`/api/v1/repuestos${qs}`, { service: 'ops' });
 }
 
 // --- Calibraciones ---

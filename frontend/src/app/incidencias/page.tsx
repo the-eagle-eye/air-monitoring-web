@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
+import { usePolling } from '@/hooks/usePolling';
 import Link from 'next/link';
 import { fetchEquipos } from '@/lib/api/lecturas';
 import { fetchIncidencias, createIncidencia } from '@/lib/api/ops';
@@ -28,25 +29,16 @@ export default function IncidenciasPage() {
 
   // Filters
   const [filterDevice, setFilterDevice] = useState('');
-  const [filterTipo, setFilterTipo] = useState('');
   const [filterEstado, setFilterEstado] = useState('');
 
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const pageSize = 50;
 
-  useEffect(() => {
-    fetchEquipos().then(setEquipos).catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterDevice, filterTipo, filterEstado, page]);
-
-  function loadData() {
-    setLoading(true);
+  const loadData = useCallback((silent = false) => {
+    if (!silent) setLoading(true);
     fetchIncidencias({
       device_id: filterDevice || undefined,
-      tipo: filterTipo || undefined,
+      tipo: 'correctiva',
       estado: filterEstado || undefined,
       page,
       page_size: pageSize,
@@ -54,16 +46,25 @@ export default function IncidenciasPage() {
       .then((res) => {
         setIncidencias(res.items);
         setTotal(res.total);
+        setLastUpdated(new Date());
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }
+      .catch((err) => { if (!silent) setError(err.message); })
+      .finally(() => { if (!silent) setLoading(false); });
+  }, [filterDevice, filterEstado, page]);
+
+  useEffect(() => {
+    fetchEquipos().then(setEquipos).catch(() => {});
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  usePolling(() => loadData(true), 30_000);
 
   async function handleCreate(data: Parameters<typeof createIncidencia>[0]) {
     await createIncidencia(data);
     setShowForm(false);
     setPage(1);
-    loadData();
+    loadData(false);
   }
 
   const totalPages = Math.ceil(total / pageSize);
@@ -71,16 +72,6 @@ export default function IncidenciasPage() {
   const columns = [
     { key: 'id', header: 'ID' },
     { key: 'device_id', header: 'Equipo' },
-    {
-      key: 'tipo',
-      header: 'Tipo',
-      render: (item: Incidencia) => (
-        <Badge
-          label={item.tipo === 'correctiva' ? 'Correctiva' : 'Calibracion'}
-          variant={item.tipo === 'correctiva' ? 'danger' : 'info'}
-        />
-      ),
-    },
     {
       key: 'estado',
       header: 'Estado',
@@ -115,12 +106,22 @@ export default function IncidenciasPage() {
       key: 'acciones',
       header: 'Acciones',
       render: (item: Incidencia) => (
-        <Link
-          href={`/incidencias/${item.id}`}
-          className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400"
-        >
-          Ver
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={`/incidencias/${item.id}`}
+            className="rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400"
+          >
+            Ver
+          </Link>
+          {item.estado !== 'finalizado' && item.estado !== 'cancelado' && (
+            <Link
+              href={`/incidencias/${item.id}?mode=edit`}
+              className="rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400"
+            >
+              Editar
+            </Link>
+          )}
+        </div>
       ),
     },
   ];
@@ -128,9 +129,16 @@ export default function IncidenciasPage() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
-          Incidencias
-        </h1>
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
+            Incidencias Correctivas
+          </h1>
+          {lastUpdated && (
+            <span className="text-xs text-zinc-400">
+              Actualizado: {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
         <button
           onClick={() => setShowForm(!showForm)}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
@@ -160,16 +168,6 @@ export default function IncidenciasPage() {
               {eq.device_id}
             </option>
           ))}
-        </select>
-
-        <select
-          value={filterTipo}
-          onChange={(e) => { setFilterTipo(e.target.value); setPage(1); }}
-          className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-        >
-          <option value="">Todos los tipos</option>
-          <option value="correctiva">Correctiva</option>
-          <option value="calibracion">Calibracion</option>
         </select>
 
         <select
