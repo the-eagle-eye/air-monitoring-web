@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class UsuarioCreate(BaseModel):
@@ -7,6 +7,7 @@ class UsuarioCreate(BaseModel):
     nombre: str
     apellido: str
     rol: str
+    password: str = Field(min_length=6)
 
 
 class UsuarioResponse(BaseModel):
@@ -19,3 +20,7 @@ class UsuarioResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UsuarioWithHash(UsuarioResponse):
+    password_hash: str | None = None

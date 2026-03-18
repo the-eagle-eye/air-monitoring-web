@@ -14,6 +14,7 @@ class Usuario(Base):
     nombre: Mapped[str] = mapped_column(String, nullable=False)
     apellido: Mapped[str] = mapped_column(String, nullable=False)
     rol: Mapped[str] = mapped_column(String, nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     estado: Mapped[str] = mapped_column(
         String, nullable=False, default="activo"
     )

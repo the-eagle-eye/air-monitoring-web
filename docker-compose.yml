@@ -89,6 +89,12 @@ services:
       - IOT_SERVICE_URL=http://iot-service:8001
       - ML_SERVICE_URL=http://ml-service:8002
       - OPS_SERVICE_URL=http://ops-service:8003
+      - SMTP_HOST=sandbox.smtp.mailtrap.io
+      - SMTP_PORT=2525
+      - SMTP_USER=09517cce65c3b6
+      - SMTP_PASSWORD=f593f36fea927e
+      - SMTP_FROM=noreply@airmonitoring.oefa.gob.pe
+      - FRONTEND_URL=http://localhost:3000
     depends_on:
       db:
         condition: service_healthy

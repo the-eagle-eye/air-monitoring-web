@@ -3,6 +3,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
+from app.routes.auth import router as auth_router
+from app.routes.dashboard import router as dashboard_router
 from app.routes.proxy import router as proxy_router
 
 app = FastAPI(
@@ -18,6 +20,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Auth routes (login, refresh, logout, me) — before proxy catch-all
+app.include_router(auth_router)
+app.include_router(dashboard_router)
 app.include_router(proxy_router)
 
 

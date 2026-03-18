@@ -2,6 +2,8 @@ import httpx
 from fastapi import APIRouter, Request, Response
 
 from app.config import settings
+from app.auth.jwt_handler import verify_token
+from app.auth.rbac import is_public_route, check_write_permission
 
 router = APIRouter()
 
@@ -13,6 +15,7 @@ SERVICE_MAP = {
     "/api/v1/incidencias": settings.OPS_SERVICE_URL,
     "/api/v1/calibraciones": settings.OPS_SERVICE_URL,
     "/api/v1/dashboard": settings.OPS_SERVICE_URL,
+    "/api/v1/usuarios": settings.OPS_SERVICE_URL,
 }
 
 
@@ -23,12 +26,29 @@ def _resolve_upstream(path: str) -> str | None:
     return None
 
 
+def _authenticate(request: Request) -> dict | None:
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header[7:]
+    return verify_token(token, expected_type="access")
+
+
 @router.api_route(
     "/api/v1/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
 )
 async def proxy(request: Request, path: str):
     full_path = f"/api/v1/{path}"
+
+    # Skip routes handled by dedicated routers (auth, dashboard/kpis)
+    if full_path.startswith("/api/v1/auth") or full_path == "/api/v1/dashboard/kpis":
+        return Response(
+            content='{"detail": "Not found"}',
+            status_code=404,
+            media_type="application/json",
+        )
+
     upstream = _resolve_upstream(full_path)
     if upstream is None:
         return Response(
@@ -37,6 +57,24 @@ async def proxy(request: Request, path: str):
             media_type="application/json",
         )
 
+    # Auth check
+    user = None
+    if not is_public_route(full_path, request.method):
+        user = _authenticate(request)
+        if user is None:
+            return Response(
+                content='{"detail": "No autenticado"}',
+                status_code=401,
+                media_type="application/json",
+            )
+        # RBAC check for write operations
+        if not check_write_permission(full_path, request.method, user["rol"]):
+            return Response(
+                content='{"detail": "No tiene permisos para esta accion"}',
+                status_code=403,
+                media_type="application/json",
+            )
+
     target_url = f"{upstream}{full_path}"
     if request.url.query:
         target_url += f"?{request.url.query}"
@@ -44,6 +82,12 @@ async def proxy(request: Request, path: str):
     body = await request.body()
     headers = dict(request.headers)
     headers.pop("host", None)
+
+    # Forward user info to downstream services
+    if user:
+        headers["x-user-id"] = str(user.get("user_id", ""))
+        headers["x-user-rol"] = user.get("rol", "")
+        headers["x-user-email"] = user.get("sub", "")
 
     async with httpx.AsyncClient(timeout=30.0) as client:
         resp = await client.request(

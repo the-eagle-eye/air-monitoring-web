@@ -24,19 +24,19 @@ def upgrade() -> None:
     # admin123
     op.execute(
         """UPDATE usuarios SET password_hash =
-        '$2b$12$LJ3m4ys3Lz0QqV9FKBR8geZPZOkKyNJiPGHXlNqUjKEoG6/.KxMi'
+        '$2b$12$X1ieno/YuY/0U.VY7ULcTu2v5NBRQO9RrC5prBmaJ1pGeiGYE4AbO'
         WHERE email = 'admin@oefa.gob.pe'"""
     )
     # tecnico123
     op.execute(
         """UPDATE usuarios SET password_hash =
-        '$2b$12$8K1p/a0dL1LXMIgoEDFrwOf5g4fWzIMaJhKJqFCEElrkfYAjCWmy2'
+        '$2b$12$uKau3IuYPf40xYk51oEKDeqzdBbfhn6qzcIWKwHrR5NItvssLNhY.'
         WHERE email = 'tecnico1@oefa.gob.pe'"""
     )
     # coord123
     op.execute(
         """UPDATE usuarios SET password_hash =
-        '$2b$12$X.Hy5TFqL6tU8gTQuI6dmOaFSTM8K6Z9Dv8.X1eLPYWR9q4L5VUuy'
+        '$2b$12$UC9.5dKsgjVao7X91sZ9seaIVIYBMbArWZVILChhk3C06XTT5l8Ba'
         WHERE email = 'coordinador1@oefa.gob.pe'"""
     )
 
