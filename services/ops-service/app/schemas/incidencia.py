@@ -2,6 +2,8 @@ from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel
 
+from app.schemas.mantenimiento import MantenimientoResponse
+
 
 class IncidenciaCreate(BaseModel):
     device_id: str
@@ -31,6 +33,10 @@ class IncidenciaResponse(BaseModel):
     updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
+
+
+class IncidenciaDetailResponse(IncidenciaResponse):
+    mantenimiento_correctivo: MantenimientoResponse | None = None
 
 
 class IncidenciaListResponse(BaseModel):

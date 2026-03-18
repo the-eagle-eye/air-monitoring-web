@@ -24,6 +24,14 @@ class RepuestoUsado(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class AdjuntoResponse(BaseModel):
+    id: int
+    filename: str
+    file_url: str
+
+    model_config = {"from_attributes": True}
+
+
 class MantenimientoResponse(BaseModel):
     id: int
     incidencia_id: int
@@ -31,6 +39,8 @@ class MantenimientoResponse(BaseModel):
     acciones_realizadas: str | None = None
     conclusion: str | None = None
     fecha_ejecucion: datetime | None = None
+    repuestos: list[RepuestoUsado] = []
+    adjuntos: list[AdjuntoResponse] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}

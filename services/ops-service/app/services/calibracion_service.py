@@ -1,28 +1,15 @@
-from sqlalchemy.orm import Session
+from datetime import datetime, timezone
+
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 
-from app.models.incidencia import Incidencia
 from app.models.calibracion import Calibracion
 from app.schemas.calibracion import CalibracionCreate, CalibracionUpdate
 
 
 def create_calibracion(db: Session, data: CalibracionCreate) -> Calibracion:
-    incidencia_id = data.incidencia_id
-
-    if incidencia_id is None:
-        # Auto-crear incidencia de calibracion
-        incidencia = Incidencia(
-            device_id=data.device_id,
-            tipo="calibracion",
-            descripcion="Calibracion programada",
-            prioridad="media",
-        )
-        db.add(incidencia)
-        db.flush()
-        incidencia_id = incidencia.id
-
     calibracion = Calibracion(
-        incidencia_id=incidencia_id,
+        incidencia_id=data.incidencia_id,
         device_id=data.device_id,
         fecha_calibracion=data.fecha_calibracion,
         nota=data.nota,
@@ -38,6 +25,7 @@ def create_calibracion(db: Session, data: CalibracionCreate) -> Calibracion:
 def get_calibracion(db: Session, calibracion_id: int) -> Calibracion | None:
     return (
         db.query(Calibracion)
+        .options(joinedload(Calibracion.incidencia))
         .filter(Calibracion.id == calibracion_id)
         .first()
     )
@@ -49,7 +37,7 @@ def list_calibraciones(
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[Calibracion], int]:
-    query = db.query(Calibracion)
+    query = db.query(Calibracion).options(joinedload(Calibracion.incidencia))
 
     if device_id:
         query = query.filter(Calibracion.device_id == device_id)
@@ -63,9 +51,12 @@ def list_calibraciones(
 def update_calibracion(
     db: Session, calibracion_id: int, data: CalibracionUpdate
 ) -> Calibracion | None:
-    calibracion = db.query(Calibracion).filter(
-        Calibracion.id == calibracion_id
-    ).first()
+    calibracion = (
+        db.query(Calibracion)
+        .options(joinedload(Calibracion.incidencia))
+        .filter(Calibracion.id == calibracion_id)
+        .first()
+    )
     if not calibracion:
         return None
 
@@ -73,6 +64,23 @@ def update_calibracion(
     for field, value in update_fields.items():
         setattr(calibracion, field, value)
 
+    # Auto-completar si los 4 campos obligatorios estan llenos
+    if (
+        calibracion.fecha_calibracion
+        and calibracion.nota
+        and calibracion.certificado_url
+        and calibracion.proveedor_id
+    ):
+        calibracion.estado = "completada"
+        if calibracion.incidencia:
+            calibracion.incidencia.estado = "finalizado"
+            calibracion.incidencia.updated_at = datetime.now(timezone.utc)
+
     db.commit()
-    db.refresh(calibracion)
-    return calibracion
+    # Re-fetch con joinedload para que la relacion incidencia este disponible
+    return (
+        db.query(Calibracion)
+        .options(joinedload(Calibracion.incidencia))
+        .filter(Calibracion.id == calibracion_id)
+        .first()
+    )

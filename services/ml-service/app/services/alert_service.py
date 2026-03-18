@@ -1,8 +1,14 @@
+import logging
+
+import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
+from app.config import settings
 from app.models.alerta import Alerta
 from app.models.prediccion import Prediccion
+
+logger = logging.getLogger(__name__)
 
 RISK_DESCRIPTIONS = {
     "alta": (
@@ -34,7 +40,27 @@ def evaluate_and_create_alert(db: Session, prediccion: Prediccion) -> Alerta:
     db.add(alerta)
     db.commit()
     db.refresh(alerta)
+
+    if alerta.nivel_riesgo == "alta":
+        _notify_ops_high_alert(prediccion.device_id)
+
     return alerta
+
+
+def _notify_ops_high_alert(device_id: str) -> None:
+    """Notificar a ops-service para crear incidencia correctiva (fire-and-forget)."""
+    try:
+        resp = httpx.post(
+            f"{settings.OPS_SERVICE_URL}/api/v1/incidencias/alert-trigger",
+            json={"device_id": device_id},
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        logger.info("ops-service notificado de alerta alta para %s", device_id)
+    except Exception:
+        logger.exception(
+            "Error notificando a ops-service de alerta alta para %s", device_id
+        )
 
 
 def get_alerts(
@@ -59,6 +85,17 @@ def get_alerts(
     total = query.count()
     items = query.offset((page - 1) * page_size).limit(page_size).all()
     return items, total
+
+
+def deactivate_alerts(db: Session, device_id: str) -> int:
+    """Desactivar todas las alertas activas de un equipo."""
+    count = (
+        db.query(Alerta)
+        .filter(Alerta.device_id == device_id, Alerta.estado == "activa")
+        .update({"estado": "inactiva"})
+    )
+    db.commit()
+    return count
 
 
 def get_alerts_by_device(db: Session, device_id: str) -> list[Alerta]:

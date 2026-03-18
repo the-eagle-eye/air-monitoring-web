@@ -1,0 +1,15 @@
+name: Daily Calibration Check
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Diario a las 6 AM UTC
+  workflow_dispatch: {}   # Permite trigger manual
+
+jobs:
+  check-annual-calibrations:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger annual calibration check
+        run: |
+          curl -X POST "${{ secrets.OPS_SERVICE_URL }}/api/v1/calibraciones/check-annual" \
+            --fail --silent --show-error --max-time 30

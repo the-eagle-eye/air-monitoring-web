@@ -10,8 +10,8 @@ class Calibracion(Base):
     __tablename__ = "calibraciones"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    incidencia_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("incidencias.id"), unique=True, nullable=False
+    incidencia_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("incidencias.id"), unique=True, nullable=True
     )
     device_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
     fecha_calibracion: Mapped[datetime | None] = mapped_column(
@@ -22,6 +22,7 @@ class Calibracion(Base):
     proveedor_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("proveedores_calibracion.id"), nullable=True
     )
+    estado: Mapped[str] = mapped_column(String, nullable=False, default="pendiente")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

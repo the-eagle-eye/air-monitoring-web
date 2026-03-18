@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.schemas.calibracion import (
     CalibracionCreate,
@@ -8,9 +9,30 @@ from app.schemas.calibracion import (
     CalibracionResponse,
     CalibracionListResponse,
 )
-from app.services import calibracion_service
+from app.schemas.incidencia import IncidenciaResponse
+from app.services import calibracion_service, incidencia_service
 
 router = APIRouter()
+
+
+@router.post("/check-annual")
+def check_annual_calibrations(db: Session = Depends(get_db)):
+    created = incidencia_service.check_annual_calibrations(
+        db, settings.IOT_SERVICE_URL
+    )
+    return {
+        "created": len(created),
+        "incidencias": [
+            IncidenciaResponse.model_validate(i) for i in created
+        ],
+    }
+
+
+def _calibracion_with_estado(cal) -> CalibracionResponse:
+    resp = CalibracionResponse.model_validate(cal)
+    if cal.incidencia:
+        resp.incidencia_estado = cal.incidencia.estado
+    return resp
 
 
 @router.get("", response_model=CalibracionListResponse)
@@ -24,7 +46,7 @@ def list_calibraciones(
         db, device_id, page, page_size
     )
     return CalibracionListResponse(
-        items=[CalibracionResponse.model_validate(c) for c in items],
+        items=[_calibracion_with_estado(c) for c in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -46,7 +68,7 @@ def get_calibracion(calibracion_id: int, db: Session = Depends(get_db)):
         raise HTTPException(
             status_code=404, detail="Calibracion no encontrada"
         )
-    return CalibracionResponse.model_validate(calibracion)
+    return _calibracion_with_estado(calibracion)
 
 
 @router.put("/{calibracion_id}", response_model=CalibracionResponse)
@@ -62,4 +84,4 @@ def update_calibracion(
         raise HTTPException(
             status_code=404, detail="Calibracion no encontrada"
         )
-    return CalibracionResponse.model_validate(calibracion)
+    return _calibracion_with_estado(calibracion)

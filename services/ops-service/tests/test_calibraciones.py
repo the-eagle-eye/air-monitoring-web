@@ -1,5 +1,5 @@
 class TestCalibraciones:
-    def test_create_calibracion_auto_incidencia(self, client):
+    def test_create_calibracion_without_incidencia(self, client):
         resp = client.post("/api/v1/calibraciones", json={
             "device_id": "T101",
             "nota": "Calibracion anual programada",
@@ -8,7 +8,8 @@ class TestCalibraciones:
         assert resp.status_code == 201
         data = resp.json()
         assert data["device_id"] == "T101"
-        assert data["incidencia_id"] is not None
+        assert data["incidencia_id"] is None
+        assert data["estado"] == "pendiente"
 
     def test_create_calibracion_with_incidencia(self, client):
         # Create calibracion-type incidencia first
@@ -70,3 +71,20 @@ class TestCalibraciones:
         })
         assert resp.status_code == 200
         assert resp.json()["certificado_url"] == "https://s3.example.com/cert.pdf"
+        assert resp.json()["estado"] == "pendiente"  # Not all 4 fields yet
+
+    def test_update_calibracion_completada(self, client):
+        create_resp = client.post("/api/v1/calibraciones", json={
+            "device_id": "T101",
+        })
+        cal_id = create_resp.json()["id"]
+
+        resp = client.put(f"/api/v1/calibraciones/{cal_id}", json={
+            "fecha_calibracion": "2026-03-17T00:00:00Z",
+            "nota": "Calibracion completada",
+            "certificado_url": "https://s3.example.com/cert.pdf",
+            "proveedor_id": 1,
+        })
+        assert resp.status_code == 200
+        assert resp.json()["estado"] == "completada"
+        assert resp.json()["incidencia_id"] is None

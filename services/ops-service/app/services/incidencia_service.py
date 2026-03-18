@@ -1,12 +1,17 @@
-from datetime import datetime, timezone, timedelta
+import logging
+from datetime import date, datetime, timezone, timedelta
 
 import httpx
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 
+logger = logging.getLogger(__name__)
+
 from app.models.incidencia import Incidencia
 from app.models.calibracion import Calibracion
+from app.models.usuario import Usuario
 from app.schemas.incidencia import IncidenciaCreate, IncidenciaUpdate
+from app.services import email_service
 
 
 def create_incidencia(db: Session, data: IncidenciaCreate) -> Incidencia:
@@ -24,10 +29,13 @@ def create_incidencia(db: Session, data: IncidenciaCreate) -> Incidencia:
 
 
 def get_incidencia(db: Session, incidencia_id: int) -> Incidencia | None:
+    from app.models.mantenimiento import MantenimientoCorrectivo, MantenimientoRepuesto
     return (
         db.query(Incidencia)
         .options(
-            joinedload(Incidencia.mantenimiento_correctivo),
+            joinedload(Incidencia.mantenimiento_correctivo)
+            .joinedload(MantenimientoCorrectivo.repuestos_usados)
+            .joinedload(MantenimientoRepuesto.repuesto),
             joinedload(Incidencia.calibracion),
             joinedload(Incidencia.responsable),
         )
@@ -76,20 +84,74 @@ def update_incidencia(
     db.commit()
     db.refresh(incidencia)
 
-    # Regla: si correctiva se finaliza, auto-crear incidencia de calibracion
+    # Regla: si correctiva se finaliza, auto-crear calibracion + desactivar alertas
     if (
         incidencia.tipo == "correctiva"
         and incidencia.estado == "finalizado"
     ):
-        _auto_create_calibracion(db, incidencia)
+        try:
+            from app.config import settings
+            _auto_create_calibracion(db, incidencia, settings.IOT_SERVICE_URL)
+        except Exception:
+            logger.exception(
+                "Error creando calibracion automatica para incidencia %s",
+                incidencia.id,
+            )
+        try:
+            from app.config import settings
+            _deactivate_device_alerts(incidencia.device_id, settings.ML_SERVICE_URL)
+        except Exception:
+            logger.exception(
+                "Error desactivando alertas para equipo %s",
+                incidencia.device_id,
+            )
 
     return incidencia
 
 
+def _get_coordinador(db: Session) -> Usuario | None:
+    """Obtener primer coordinador activo."""
+    return (
+        db.query(Usuario)
+        .filter(Usuario.rol == "coordinador", Usuario.estado == "activo")
+        .first()
+    )
+
+
+def _fetch_equipo_data(iot_service_url: str, device_id: str) -> dict:
+    """Obtener datos de equipo desde iot-service."""
+    try:
+        resp = httpx.get(
+            f"{iot_service_url}/api/v1/iot/equipos/{device_id}",
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except (httpx.HTTPError, Exception):
+        return {"device_id": device_id}
+
+
+def _deactivate_device_alerts(device_id: str, ml_service_url: str) -> None:
+    """Desactivar alertas activas en ml-service (fire-and-forget)."""
+    try:
+        resp = httpx.patch(
+            f"{ml_service_url}/api/v1/alerts/deactivate/{device_id}",
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        logger.info("Alertas desactivadas para equipo %s", device_id)
+    except Exception:
+        logger.exception(
+            "Error desactivando alertas en ml-service para %s", device_id
+        )
+
+
 def _auto_create_calibracion(
-    db: Session, correctiva: Incidencia
+    db: Session, correctiva: Incidencia, iot_service_url: str = ""
 ) -> Incidencia:
     """Crear incidencia de calibracion cuando una correctiva finaliza."""
+    coordinador = _get_coordinador(db)
+
     cal_incidencia = Incidencia(
         device_id=correctiva.device_id,
         tipo="calibracion",
@@ -98,6 +160,7 @@ def _auto_create_calibracion(
             f"(incidencia #{correctiva.id})"
         ),
         prioridad="alta",
+        responsable_id=coordinador.id if coordinador else None,
     )
     db.add(cal_incidencia)
     db.commit()
@@ -109,7 +172,61 @@ def _auto_create_calibracion(
     )
     db.add(calibracion)
     db.commit()
+
+    equipo_data = _fetch_equipo_data(iot_service_url, correctiva.device_id)
+    email_service.send_calibracion_notification(
+        db, equipo_data, cal_incidencia.id, motivo="post_correctiva"
+    )
+
     return cal_incidencia
+
+
+def create_alert_triggered_incidencia(
+    db: Session, device_id: str, iot_service_url: str = ""
+) -> Incidencia | None:
+    """Crear incidencia correctiva cuando se detecta alerta alta (RUL <= 30 dias).
+
+    Idempotente: no crea duplicados si ya existe una correctiva hoy para el equipo.
+    Retorna la incidencia creada, o None si ya existia.
+    """
+    today_start = datetime.now(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+
+    existing = (
+        db.query(Incidencia)
+        .filter(
+            Incidencia.device_id == device_id,
+            Incidencia.tipo == "correctiva",
+            Incidencia.created_at >= today_start,
+        )
+        .first()
+    )
+    if existing:
+        return None
+
+    coordinador = _get_coordinador(db)
+
+    incidencia = Incidencia(
+        device_id=device_id,
+        tipo="correctiva",
+        descripcion=(
+            f"Incidencia automatica: alerta alta detectada "
+            f"para equipo {device_id} (RUL <= 30 dias)"
+        ),
+        prioridad="alta",
+        responsable_id=coordinador.id if coordinador else None,
+    )
+    db.add(incidencia)
+    db.commit()
+    db.refresh(incidencia)
+
+    equipo_data = _fetch_equipo_data(iot_service_url, device_id)
+    email_service.send_alerta_correctiva_notification(
+        db, equipo_data, incidencia.id
+    )
+
+    return incidencia
 
 
 def evaluate_alerts(db: Session, ml_service_url: str) -> list[Incidencia]:
@@ -172,6 +289,111 @@ def evaluate_alerts(db: Session, ml_service_url: str) -> list[Incidencia]:
         db.add(incidencia)
         db.commit()
         db.refresh(incidencia)
+        created_incidencias.append(incidencia)
+
+    return created_incidencias
+
+
+def _next_anniversary(fecha_ingreso: date, today: date) -> date:
+    """Calcular proximo aniversario de fecha_ingreso."""
+    for year_offset in range(0, 5):
+        try:
+            anniversary = fecha_ingreso.replace(year=today.year + year_offset)
+        except ValueError:
+            # 29 feb en anio no bisiesto
+            anniversary = date(today.year + year_offset, 3, 1)
+        if anniversary >= today:
+            return anniversary
+    return fecha_ingreso.replace(year=today.year + 5)
+
+
+def check_annual_calibrations(
+    db: Session, iot_service_url: str
+) -> list[Incidencia]:
+    """Verificar equipos proximos a su aniversario y crear calibraciones."""
+    try:
+        response = httpx.get(
+            f"{iot_service_url}/api/v1/iot/equipos",
+            timeout=10.0,
+        )
+        response.raise_for_status()
+        data = response.json()
+    except (httpx.HTTPError, Exception):
+        return []
+
+    equipos = data.get("items", data) if isinstance(data, dict) else data
+    today = date.today()
+    coordinador = _get_coordinador(db)
+    created_incidencias: list[Incidencia] = []
+
+    for equipo in equipos:
+        fecha_str = equipo.get("fecha_ingreso")
+        if not fecha_str:
+            continue
+
+        try:
+            fecha_ingreso = date.fromisoformat(str(fecha_str))
+        except (ValueError, TypeError):
+            continue
+
+        anniversary = _next_anniversary(fecha_ingreso, today)
+        days_until = (anniversary - today).days
+
+        if not (0 <= days_until <= 7):
+            continue
+
+        device_id = equipo["device_id"]
+
+        # Idempotencia: verificar si ya existe incidencia anual reciente
+        window_start = anniversary - timedelta(days=30)
+        window_end = anniversary + timedelta(days=30)
+        existing = (
+            db.query(Incidencia)
+            .filter(
+                Incidencia.device_id == device_id,
+                Incidencia.tipo == "calibracion",
+                Incidencia.descripcion.contains("Calibracion anual"),
+                Incidencia.created_at >= datetime(
+                    window_start.year, window_start.month, window_start.day,
+                    tzinfo=timezone.utc
+                ),
+                Incidencia.created_at <= datetime(
+                    window_end.year, window_end.month, window_end.day,
+                    23, 59, 59, tzinfo=timezone.utc
+                ),
+            )
+            .first()
+        )
+        if existing:
+            continue
+
+        incidencia = Incidencia(
+            device_id=device_id,
+            tipo="calibracion",
+            descripcion=(
+                f"Calibracion anual programada para equipo {device_id}. "
+                f"Aniversario: {anniversary.isoformat()}"
+            ),
+            prioridad="media",
+            responsable_id=coordinador.id if coordinador else None,
+        )
+        db.add(incidencia)
+        db.commit()
+        db.refresh(incidencia)
+
+        calibracion = Calibracion(
+            incidencia_id=incidencia.id,
+            device_id=device_id,
+        )
+        db.add(calibracion)
+        db.commit()
+
+        equipo_data = dict(equipo)
+        equipo_data["fecha_aniversario"] = anniversary.isoformat()
+        email_service.send_calibracion_notification(
+            db, equipo_data, incidencia.id, motivo="anual"
+        )
+
         created_incidencias.append(incidencia)
 
     return created_incidencias

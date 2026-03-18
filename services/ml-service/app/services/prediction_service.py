@@ -11,7 +11,7 @@ from app.models.prediccion import Prediccion
 from app.services.alert_service import evaluate_and_create_alert
 
 
-def _fetch_readings(device_id: str, page_size: int = 200) -> list[dict]:
+def _fetch_readings(device_id: str, page_size: int = 288) -> list[dict]:
     """Fetch recent readings from iot-service for a device."""
     url = (
         f"{settings.IOT_SERVICE_URL}/api/v1/iot/readings/{device_id}"

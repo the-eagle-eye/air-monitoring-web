@@ -1,4 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -7,10 +9,21 @@ from app.schemas.incidencia import (
     IncidenciaCreate,
     IncidenciaUpdate,
     IncidenciaResponse,
+    IncidenciaDetailResponse,
     IncidenciaListResponse,
 )
-from app.schemas.mantenimiento import MantenimientoCreate, MantenimientoResponse
+from app.schemas.mantenimiento import (
+    MantenimientoCreate,
+    MantenimientoResponse,
+    RepuestoUsado,
+    AdjuntoResponse,
+)
+from app.models.archivo_adjunto import ArchivoAdjunto
 from app.services import incidencia_service, mantenimiento_service
+
+
+class AlertTriggerRequest(BaseModel):
+    device_id: str
 
 router = APIRouter()
 
@@ -41,14 +54,53 @@ def create_incidencia(data: IncidenciaCreate, db: Session = Depends(get_db)):
     return IncidenciaResponse.model_validate(incidencia)
 
 
-@router.get("/{incidencia_id}", response_model=IncidenciaResponse)
+def _build_mantenimiento_response(
+    mto, db: Session
+) -> MantenimientoResponse | None:
+    if mto is None:
+        return None
+    repuestos = [
+        RepuestoUsado.model_validate(ru.repuesto)
+        for ru in (mto.repuestos_usados or [])
+        if ru.repuesto
+    ]
+    adjuntos_db = (
+        db.query(ArchivoAdjunto)
+        .filter(
+            ArchivoAdjunto.entidad_tipo == "mantenimiento",
+            ArchivoAdjunto.entidad_id == mto.id,
+        )
+        .all()
+    )
+    adjuntos = [AdjuntoResponse.model_validate(a) for a in adjuntos_db]
+    return MantenimientoResponse(
+        id=mto.id,
+        incidencia_id=mto.incidencia_id,
+        diagnostico=mto.diagnostico,
+        acciones_realizadas=mto.acciones_realizadas,
+        conclusion=mto.conclusion,
+        fecha_ejecucion=mto.fecha_ejecucion,
+        repuestos=repuestos,
+        adjuntos=adjuntos,
+        created_at=mto.created_at,
+    )
+
+
+@router.get("/{incidencia_id}", response_model=IncidenciaDetailResponse)
 def get_incidencia(incidencia_id: int, db: Session = Depends(get_db)):
     incidencia = incidencia_service.get_incidencia(db, incidencia_id)
     if not incidencia:
         raise HTTPException(
             status_code=404, detail="Incidencia no encontrada"
         )
-    return IncidenciaResponse.model_validate(incidencia)
+    resp = IncidenciaResponse.model_validate(incidencia)
+    mto_resp = _build_mantenimiento_response(
+        incidencia.mantenimiento_correctivo, db
+    )
+    return IncidenciaDetailResponse(
+        **resp.model_dump(),
+        mantenimiento_correctivo=mto_resp,
+    )
 
 
 @router.put("/{incidencia_id}", response_model=IncidenciaResponse)
@@ -78,10 +130,24 @@ def submit_mantenimiento(
     mantenimiento = mantenimiento_service.submit_mantenimiento(
         db, incidencia_id, data
     )
-    return MantenimientoResponse.model_validate(mantenimiento)
+    return _build_mantenimiento_response(mantenimiento, db)
 
 
 @router.post("/evaluar", response_model=list[IncidenciaResponse])
 def evaluar_alertas(db: Session = Depends(get_db)):
     created = incidencia_service.evaluate_alerts(db, settings.ML_SERVICE_URL)
     return [IncidenciaResponse.model_validate(i) for i in created]
+
+
+@router.post("/alert-trigger", response_model=IncidenciaResponse, status_code=201)
+def alert_trigger(data: AlertTriggerRequest, db: Session = Depends(get_db)):
+    """Crear incidencia correctiva automatica cuando ml-service detecta alerta alta."""
+    incidencia = incidencia_service.create_alert_triggered_incidencia(
+        db, data.device_id, settings.IOT_SERVICE_URL
+    )
+    if incidencia is None:
+        return JSONResponse(
+            status_code=200,
+            content={"detail": "Incidencia correctiva ya existe para hoy"},
+        )
+    return IncidenciaResponse.model_validate(incidencia)

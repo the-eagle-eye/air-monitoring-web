@@ -74,7 +74,7 @@ def create_reading(payload: LecturaIoTCreate, db: Session = Depends(get_db)):
 def get_readings(
     device_id: str,
     page: int = Query(1, ge=1),
-    page_size: int = Query(50, ge=1, le=200),
+    page_size: int = Query(50, ge=1, le=300),
     db: Session = Depends(get_db),
 ):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
