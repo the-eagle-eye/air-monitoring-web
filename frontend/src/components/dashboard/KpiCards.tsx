@@ -14,7 +14,7 @@ const cards = [
   },
   {
     key: 'alertasAltas' as const,
-    label: 'Alertas Altas',
+    label: 'Alertas Activas',
     accent: 'text-red-600',
     bg: 'bg-red-50 dark:bg-red-950',
     format: (v: number) => String(v),

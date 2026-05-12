@@ -22,7 +22,7 @@ import type { Incidencia, CalibracionOps } from '@/types/ops';
 function computeKpis(data: DashboardData): KpiData {
   const predictions = Object.values(data.latestPredictions);
   const alertasAltas = data.alertas.filter(
-    (a) => a.nivel_riesgo === 'alta' && a.estado === 'activa',
+    (a) => (a.nivel_riesgo === 'alta' || a.nivel_riesgo === 'media') && a.estado === 'activa',
   ).length;
   const rulValues = predictions.map((p) => p.remaining_useful_life_days);
   const rulPromedio =

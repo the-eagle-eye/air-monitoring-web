@@ -7,9 +7,10 @@ import type { Equipo } from '@/types/lectura';
 
 interface EquiposTableProps {
   equipos: Equipo[];
+  readOnly?: boolean;
 }
 
-export default function EquiposTable({ equipos }: EquiposTableProps) {
+export default function EquiposTable({ equipos, readOnly = false }: EquiposTableProps) {
   const columns = [
     {
       key: 'nombre',
@@ -51,19 +52,23 @@ export default function EquiposTable({ equipos }: EquiposTableProps) {
           >
             Ver
           </Link>
-          <Link
-            href={`/equipos/${item.device_id}?mode=edit`}
-            className="rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400"
-          >
-            Editar
-          </Link>
-          <button
-            disabled
-            title="Proximamente"
-            className="cursor-not-allowed rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-400 dark:bg-zinc-800"
-          >
-            Eliminar
-          </button>
+          {!readOnly && (
+            <>
+              <Link
+                href={`/equipos/${item.device_id}?mode=edit`}
+                className="rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100 dark:bg-amber-900/30 dark:text-amber-400"
+              >
+                Editar
+              </Link>
+              <button
+                disabled
+                title="Proximamente"
+                className="cursor-not-allowed rounded bg-zinc-100 px-2 py-1 text-xs font-medium text-zinc-400 dark:bg-zinc-800"
+              >
+                Eliminar
+              </button>
+            </>
+          )}
         </div>
       ),
     },

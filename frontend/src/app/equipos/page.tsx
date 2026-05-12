@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { fetchEquipos } from '@/lib/api/lecturas';
+import { useAuth } from '@/lib/auth';
 import EquiposTable from '@/components/equipos/EquiposTable';
 import type { Equipo } from '@/types/lectura';
 
@@ -10,6 +11,9 @@ export default function EquiposPage() {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
+
+  const canEdit = user?.rol === 'administrador';
 
   useEffect(() => {
     fetchEquipos()
@@ -24,12 +28,14 @@ export default function EquiposPage() {
         <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
           Equipos
         </h1>
-        <Link
-          href="/equipos/nuevo"
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Nuevo Equipo
-        </Link>
+        {canEdit && (
+          <Link
+            href="/equipos/nuevo"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            Nuevo Equipo
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -41,7 +47,7 @@ export default function EquiposPage() {
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <EquiposTable equipos={equipos} />
+        <EquiposTable equipos={equipos} readOnly={!canEdit} />
       )}
     </div>
   );

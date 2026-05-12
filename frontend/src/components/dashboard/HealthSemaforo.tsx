@@ -17,7 +17,7 @@ function computeHealthScore(
   const preds = Object.values(predictions);
   const countAlta = preds.filter((p) => p.risk_level === 'alta').length;
   const countRulCritico = preds.filter(
-    (p) => p.remaining_useful_life_days <= 30,
+    (p) => p.remaining_useful_life_days < 30,
   ).length;
   const deviceIdsConIncidencia = new Set(
     incidenciasAbiertas.map((i) => i.device_id),
