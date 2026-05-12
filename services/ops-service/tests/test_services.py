@@ -72,38 +72,72 @@ class TestIncidenciaService:
     def test_evaluate_alerts_creates_incidencias(self, db_session):
         """When ml-service returns >=2 high alerts for a device today, create incidencia."""
         now = datetime.now(timezone.utc).isoformat()
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "items": [
-                {
-                    "id": 1, "device_id": "T101", "nivel_riesgo": "alta",
-                    "estado": "activa", "created_at": now,
-                },
-                {
-                    "id": 2, "device_id": "T101", "nivel_riesgo": "alta",
-                    "estado": "activa", "created_at": now,
-                },
-                {
-                    "id": 3, "device_id": "T102", "nivel_riesgo": "alta",
-                    "estado": "activa", "created_at": now,
-                },
-            ],
-            "total": 3,
-        }
 
-        with patch("app.services.incidencia_service.httpx.get", return_value=mock_response):
+        def mock_get(url, **kwargs):
+            nivel = kwargs.get("params", {}).get("nivel_riesgo", "alta")
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            if nivel == "alta":
+                resp.json.return_value = {
+                    "items": [
+                        {"id": 1, "device_id": "T101", "nivel_riesgo": "alta",
+                         "estado": "activa", "created_at": now},
+                        {"id": 2, "device_id": "T101", "nivel_riesgo": "alta",
+                         "estado": "activa", "created_at": now},
+                        {"id": 3, "device_id": "T102", "nivel_riesgo": "alta",
+                         "estado": "activa", "created_at": now},
+                    ],
+                    "total": 3,
+                }
+            else:
+                resp.json.return_value = {"items": [], "total": 0}
+            return resp
+
+        with patch("app.services.incidencia_service.httpx.get", side_effect=mock_get):
             created = incidencia_service.evaluate_alerts(
                 db_session, "http://ml-service:8002"
             )
 
-        # T101 has 2 alerts -> incidencia created
-        # T102 has 1 alert -> no incidencia
+        # T101 has 2 alta alerts -> incidencia created
+        # T102 has 1 alta alert -> no incidencia
         assert len(created) == 1
         assert created[0].device_id == "T101"
         assert created[0].tipo == "correctiva"
         assert created[0].prioridad == "alta"
+
+    def test_evaluate_alerts_media_creates_incidencias(self, db_session):
+        """When ml-service returns >=2 media alerts for a device today, create incidencia with media priority."""
+        now = datetime.now(timezone.utc).isoformat()
+
+        def mock_get(url, **kwargs):
+            nivel = kwargs.get("params", {}).get("nivel_riesgo", "alta")
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            if nivel == "media":
+                resp.json.return_value = {
+                    "items": [
+                        {"id": 10, "device_id": "T103", "nivel_riesgo": "media",
+                         "estado": "activa", "created_at": now},
+                        {"id": 11, "device_id": "T103", "nivel_riesgo": "media",
+                         "estado": "activa", "created_at": now},
+                    ],
+                    "total": 2,
+                }
+            else:
+                resp.json.return_value = {"items": [], "total": 0}
+            return resp
+
+        with patch("app.services.incidencia_service.httpx.get", side_effect=mock_get):
+            created = incidencia_service.evaluate_alerts(
+                db_session, "http://ml-service:8002"
+            )
+
+        assert len(created) == 1
+        assert created[0].device_id == "T103"
+        assert created[0].tipo == "correctiva"
+        assert created[0].prioridad == "media"
 
     def test_evaluate_alerts_no_duplicate(self, db_session):
         """If incidencia already exists today for device, don't create another."""
@@ -115,20 +149,27 @@ class TestIncidenciaService:
         )
 
         now = datetime.now(timezone.utc).isoformat()
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.raise_for_status = MagicMock()
-        mock_response.json.return_value = {
-            "items": [
-                {"id": 1, "device_id": "T101", "nivel_riesgo": "alta",
-                 "estado": "activa", "created_at": now},
-                {"id": 2, "device_id": "T101", "nivel_riesgo": "alta",
-                 "estado": "activa", "created_at": now},
-            ],
-            "total": 2,
-        }
 
-        with patch("app.services.incidencia_service.httpx.get", return_value=mock_response):
+        def mock_get(url, **kwargs):
+            nivel = kwargs.get("params", {}).get("nivel_riesgo", "alta")
+            resp = MagicMock()
+            resp.status_code = 200
+            resp.raise_for_status = MagicMock()
+            if nivel == "alta":
+                resp.json.return_value = {
+                    "items": [
+                        {"id": 1, "device_id": "T101", "nivel_riesgo": "alta",
+                         "estado": "activa", "created_at": now},
+                        {"id": 2, "device_id": "T101", "nivel_riesgo": "alta",
+                         "estado": "activa", "created_at": now},
+                    ],
+                    "total": 2,
+                }
+            else:
+                resp.json.return_value = {"items": [], "total": 0}
+            return resp
+
+        with patch("app.services.incidencia_service.httpx.get", side_effect=mock_get):
             created = incidencia_service.evaluate_alerts(
                 db_session, "http://ml-service:8002"
             )
@@ -161,6 +202,26 @@ class TestAlertTriggeredIncidencia:
         coord = db_session.get(Usuario, result.responsable_id)
         assert coord.rol == "coordinador"
         mock_email.assert_called_once()
+
+    @patch("app.services.incidencia_service._fetch_equipo_data")
+    @patch("app.services.email_service.send_alerta_correctiva_notification")
+    def test_creates_correctiva_media_priority(
+        self, mock_email, mock_fetch, db_session
+    ):
+        """Media alert trigger should create correctiva incidencia with media priority."""
+        mock_fetch.return_value = {"device_id": "T103"}
+        mock_email.return_value = True
+
+        result = incidencia_service.create_alert_triggered_incidencia(
+            db_session, "T103", "http://iot-service:8001", nivel_riesgo="media"
+        )
+
+        assert result is not None
+        assert result.device_id == "T103"
+        assert result.tipo == "correctiva"
+        assert result.prioridad == "media"
+        assert "alerta media" in result.descripcion
+        assert "< 60" in result.descripcion
 
     @patch("app.services.incidencia_service._fetch_equipo_data")
     @patch("app.services.email_service.send_alerta_correctiva_notification")

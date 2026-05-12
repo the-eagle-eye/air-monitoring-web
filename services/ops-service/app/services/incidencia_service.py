@@ -51,6 +51,7 @@ def list_incidencias(
     estado: str | None = None,
     page: int = 1,
     page_size: int = 50,
+    responsable_id: int | None = None,
 ) -> tuple[list[Incidencia], int]:
     query = db.query(Incidencia)
 
@@ -60,6 +61,8 @@ def list_incidencias(
         query = query.filter(Incidencia.tipo == tipo)
     if estado:
         query = query.filter(Incidencia.estado == estado)
+    if responsable_id is not None:
+        query = query.filter(Incidencia.responsable_id == responsable_id)
 
     query = query.order_by(desc(Incidencia.created_at))
     total = query.count()
@@ -182,9 +185,10 @@ def _auto_create_calibracion(
 
 
 def create_alert_triggered_incidencia(
-    db: Session, device_id: str, iot_service_url: str = ""
+    db: Session, device_id: str, iot_service_url: str = "",
+    nivel_riesgo: str = "alta",
 ) -> Incidencia | None:
-    """Crear incidencia correctiva cuando se detecta alerta alta (RUL <= 30 dias).
+    """Crear incidencia correctiva cuando se detecta alerta alta o media.
 
     Idempotente: no crea duplicados si ya existe una correctiva hoy para el equipo.
     Retorna la incidencia creada, o None si ya existia.
@@ -206,15 +210,17 @@ def create_alert_triggered_incidencia(
         return None
 
     coordinador = _get_coordinador(db)
+    prioridad = "alta" if nivel_riesgo == "alta" else "media"
+    rul_desc = "< 30" if nivel_riesgo == "alta" else "< 60"
 
     incidencia = Incidencia(
         device_id=device_id,
         tipo="correctiva",
         descripcion=(
-            f"Incidencia automatica: alerta alta detectada "
-            f"para equipo {device_id} (RUL <= 30 dias)"
+            f"Incidencia automatica: alerta {nivel_riesgo} detectada "
+            f"para equipo {device_id} (RUL {rul_desc} dias)"
         ),
-        prioridad="alta",
+        prioridad=prioridad,
         responsable_id=coordinador.id if coordinador else None,
     )
     db.add(incidencia)
@@ -230,66 +236,68 @@ def create_alert_triggered_incidencia(
 
 
 def evaluate_alerts(db: Session, ml_service_url: str) -> list[Incidencia]:
-    """Evaluar alertas del ml-service y crear incidencias automaticas."""
-    try:
-        response = httpx.get(
-            f"{ml_service_url}/api/v1/alerts",
-            params={"estado": "activa", "nivel_riesgo": "alta", "page_size": "200"},
-            timeout=10.0,
-        )
-        response.raise_for_status()
-        data = response.json()
-    except (httpx.HTTPError, Exception):
-        return []
-
-    alertas = data.get("items", [])
+    """Evaluar alertas alta y media del ml-service y crear incidencias automaticas."""
+    created_incidencias: list[Incidencia] = []
     today_start = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
 
-    # Agrupar alertas de hoy por device_id
-    device_counts: dict[str, int] = {}
-    for alerta in alertas:
-        created = alerta.get("created_at", "")
+    for nivel in ("alta", "media"):
         try:
-            created_dt = datetime.fromisoformat(created)
-            if created_dt >= today_start:
-                did = alerta["device_id"]
-                device_counts[did] = device_counts.get(did, 0) + 1
-        except (ValueError, KeyError):
-            continue
-
-    created_incidencias: list[Incidencia] = []
-    for device_id, count in device_counts.items():
-        if count < 2:
-            continue
-
-        # Verificar si ya existe incidencia correctiva hoy para este equipo
-        existing = (
-            db.query(Incidencia)
-            .filter(
-                Incidencia.device_id == device_id,
-                Incidencia.tipo == "correctiva",
-                Incidencia.created_at >= today_start,
+            response = httpx.get(
+                f"{ml_service_url}/api/v1/alerts",
+                params={"estado": "activa", "nivel_riesgo": nivel, "page_size": "200"},
+                timeout=10.0,
             )
-            .first()
-        )
-        if existing:
+            response.raise_for_status()
+            data = response.json()
+        except (httpx.HTTPError, Exception):
             continue
 
-        incidencia = Incidencia(
-            device_id=device_id,
-            tipo="correctiva",
-            descripcion=(
-                f"Incidencia automatica: {count} alertas altas detectadas "
-                f"para equipo {device_id} en el dia de hoy"
-            ),
-            prioridad="alta",
-        )
-        db.add(incidencia)
-        db.commit()
-        db.refresh(incidencia)
-        created_incidencias.append(incidencia)
+        alertas = data.get("items", [])
+
+        # Agrupar alertas de hoy por device_id
+        device_counts: dict[str, int] = {}
+        for alerta in alertas:
+            created = alerta.get("created_at", "")
+            try:
+                created_dt = datetime.fromisoformat(created)
+                if created_dt >= today_start:
+                    did = alerta["device_id"]
+                    device_counts[did] = device_counts.get(did, 0) + 1
+            except (ValueError, KeyError):
+                continue
+
+        for device_id, count in device_counts.items():
+            if count < 2:
+                continue
+
+            existing = (
+                db.query(Incidencia)
+                .filter(
+                    Incidencia.device_id == device_id,
+                    Incidencia.tipo == "correctiva",
+                    Incidencia.created_at >= today_start,
+                )
+                .first()
+            )
+            if existing:
+                continue
+
+            prioridad = "alta" if nivel == "alta" else "media"
+            incidencia = Incidencia(
+                device_id=device_id,
+                tipo="correctiva",
+                descripcion=(
+                    f"Incidencia automatica: {count} alertas {nivel} detectadas "
+                    f"para equipo {device_id} en el dia de hoy"
+                ),
+                prioridad=prioridad,
+            )
+            db.add(incidencia)
+            db.commit()
+            db.refresh(incidencia)
+            created_incidencias.append(incidencia)
 
     return created_incidencias
 

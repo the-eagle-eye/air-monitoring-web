@@ -6,6 +6,7 @@ from app.api.v1.calibraciones import router as calibraciones_router
 from app.api.v1.repuestos import router as repuestos_router
 from app.api.v1.usuarios import router as usuarios_router
 from app.api.v1.proveedores import router as proveedores_router
+from app.api.v1.reportes import router as reportes_router
 
 router = APIRouter(prefix="/api/v1")
 
@@ -17,3 +18,4 @@ router.include_router(
 router.include_router(repuestos_router, prefix="/repuestos", tags=["Repuestos"])
 router.include_router(usuarios_router, prefix="/usuarios", tags=["Usuarios"])
 router.include_router(proveedores_router, prefix="/proveedores", tags=["Proveedores"])
+router.include_router(reportes_router, prefix="/reportes", tags=["Reportes"])
