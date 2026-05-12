@@ -28,19 +28,23 @@ const SENSOR_LINES = [
   { key: 'uv_lamp_intensity', name: 'Intensidad UV', color: '#eab308' },
 ];
 
+function parseUTC(ts: string): Date {
+  return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+}
+
 function formatTs(ts: string): string {
-  const d = new Date(ts);
+  const d = parseUTC(ts);
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 function rulColor(rul: number): string {
-  if (rul <= 30) return 'text-red-500';
-  if (rul <= 70) return 'text-yellow-500';
+  if (rul < 30) return 'text-red-500';
+  if (rul < 60) return 'text-yellow-500';
   return 'text-green-500';
 }
 
 function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff = Date.now() - parseUTC(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `hace ${minutes}m`;
   const hours = Math.floor(minutes / 60);
@@ -74,7 +78,7 @@ const MiniPredictionChart = dynamic(
               <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px', color: '#fafafa', fontSize: 12 }} />
               <Legend />
               <ReferenceLine yAxisId="left" y={30} stroke="#ef4444" strokeDasharray="6 3" />
-              <ReferenceLine yAxisId="left" y={70} stroke="#eab308" strokeDasharray="6 3" />
+              <ReferenceLine yAxisId="left" y={60} stroke="#eab308" strokeDasharray="6 3" />
               <Line yAxisId="left" type="monotone" dataKey="rul" name="RUL (dias)" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3, fill: '#06b6d4' }} connectNulls />
               <Line yAxisId="right" type="monotone" dataKey="failProb" name="Prob. Falla (%)" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} connectNulls />
             </ComposedChart>
@@ -193,7 +197,7 @@ export default function EquipoDetailPage() {
         setIncCalibraciones(cal.items);
         setPredicciones(preds.items);
         setLecturas(lects.items);
-        setAlertas(alts.items);
+        setAlertas(alts.items.filter((a) => a.nivel_riesgo === 'alta' || a.nivel_riesgo === 'media'));
         setCalibraciones(calOps.items);
         setLastUpdated(new Date());
       })
@@ -233,7 +237,7 @@ export default function EquipoDetailPage() {
   const latest = predicciones.length > 0 ? predicciones[0] : null;
 
   const predChartData = [...predicciones]
-    .sort((a, b) => new Date(a.prediction_timestamp).getTime() - new Date(b.prediction_timestamp).getTime())
+    .sort((a, b) => parseUTC(a.prediction_timestamp).getTime() - parseUTC(b.prediction_timestamp).getTime())
     .map((p) => ({
       timestamp: formatTs(p.prediction_timestamp),
       rul: p.remaining_useful_life_days,
@@ -281,7 +285,7 @@ export default function EquipoDetailPage() {
     {
       key: 'created_at',
       header: 'Fecha',
-      render: (item: Incidencia) => new Date(item.created_at).toLocaleDateString(),
+      render: (item: Incidencia) => parseUTC(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -328,7 +332,7 @@ export default function EquipoDetailPage() {
     {
       key: 'created_at',
       header: 'Creada',
-      render: (item: CalibracionOps) => new Date(item.created_at).toLocaleDateString(),
+      render: (item: CalibracionOps) => parseUTC(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -531,7 +535,7 @@ export default function EquipoDetailPage() {
                         {alerta.descripcion ?? `Alerta ${alerta.nivel_riesgo}`}
                       </p>
                       <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {new Date(alerta.created_at).toLocaleString()}
+                        {parseUTC(alerta.created_at).toLocaleString()}
                       </p>
                     </div>
                   </div>

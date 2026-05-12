@@ -9,8 +9,12 @@ const PRIORIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
   baja: 'success',
 };
 
+function parseUTC(ts: string): Date {
+  return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+}
+
 function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
+  const diff = Date.now() - parseUTC(dateStr).getTime();
   const minutes = Math.floor(diff / 60000);
   if (minutes < 60) return `hace ${minutes}m`;
   const hours = Math.floor(minutes / 60);
@@ -25,7 +29,7 @@ interface IncidenciasSummaryProps {
 
 export default function IncidenciasSummary({ incidencias }: IncidenciasSummaryProps) {
   const recent = [...incidencias]
-    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+    .sort((a, b) => parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime())
     .slice(0, 8);
 
   return (

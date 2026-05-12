@@ -1,6 +1,10 @@
 import Link from 'next/link';
 import type { CalibracionOps } from '@/types/ops';
 
+function parseUTC(ts: string): Date {
+  return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+}
+
 interface ProximasCalibracionesProps {
   calibraciones: CalibracionOps[];
 }
@@ -40,7 +44,7 @@ export default function ProximasCalibraciones({ calibraciones }: ProximasCalibra
                 </span>
               </div>
               <span className="text-xs text-zinc-400">
-                {new Date(cal.created_at).toLocaleDateString()}
+                {parseUTC(cal.created_at).toLocaleDateString()}
               </span>
             </Link>
           ))}

@@ -3,8 +3,12 @@
 import dynamic from 'next/dynamic';
 import type { Prediccion } from '@/types/prediccion';
 
+function parseUTC(ts: string): Date {
+  return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+}
+
 function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
+  const d = parseUTC(ts);
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
@@ -83,7 +87,7 @@ const Chart = dynamic(
               />
               <ReferenceLine
                 yAxisId="left"
-                y={70}
+                y={60}
                 stroke="#eab308"
                 strokeDasharray="6 3"
                 label={{ value: 'Precaucion', position: 'left', fill: '#eab308', fontSize: 11 }}
@@ -136,8 +140,8 @@ export default function PredictionTrendsChart({
   const chartData = [...predicciones]
     .sort(
       (a, b) =>
-        new Date(a.prediction_timestamp).getTime() -
-        new Date(b.prediction_timestamp).getTime(),
+        parseUTC(a.prediction_timestamp).getTime() -
+        parseUTC(b.prediction_timestamp).getTime(),
     )
     .map((p) => ({
       timestamp: formatTimestamp(p.prediction_timestamp),

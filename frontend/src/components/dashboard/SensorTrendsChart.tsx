@@ -12,8 +12,12 @@ const SENSOR_LINES = [
   { key: 'uv_lamp_intensity', name: 'Intensidad UV', color: '#eab308' },
 ];
 
+function parseUTC(ts: string): Date {
+  return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
+}
+
 function formatTimestamp(ts: string): string {
-  const d = new Date(ts);
+  const d = parseUTC(ts);
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
