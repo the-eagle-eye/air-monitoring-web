@@ -100,7 +100,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(res.usuario);
       }
       setToken(res.access_token);
-      router.replace('/dashboard');
+      const rolDest = res.usuario?.rol === 'tecnico' ? '/dashboard-tecnico' : '/dashboard';
+      router.replace(rolDest);
     },
     [router],
   );

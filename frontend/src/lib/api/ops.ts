@@ -1,13 +1,21 @@
 import { apiFetch } from '../api';
+import { SERVICE_URLS } from '../api';
 import type {
   Incidencia,
   IncidenciaListResponse,
   CalibracionOps,
   CalibracionListResponse,
   Mantenimiento,
+  ReportePreviewResponse,
   Usuario,
+  UsuarioCreate,
+  UsuarioUpdate,
   Proveedor,
+  ProveedorCreate,
+  ProveedorUpdate,
   Repuesto,
+  RepuestoCreate,
+  RepuestoUpdate,
 } from '@/types/ops';
 
 // --- Incidencias ---
@@ -28,12 +36,12 @@ export async function fetchIncidencias(params?: {
   const qs = searchParams.toString();
   return apiFetch<IncidenciaListResponse>(
     `/api/v1/incidencias${qs ? `?${qs}` : ''}`,
-    { service: 'ops' },
+    { service: 'gateway' },
   );
 }
 
 export async function fetchIncidencia(id: number): Promise<Incidencia> {
-  return apiFetch<Incidencia>(`/api/v1/incidencias/${id}`, { service: 'ops' });
+  return apiFetch<Incidencia>(`/api/v1/incidencias/${id}`, { service: 'gateway' });
 }
 
 export async function createIncidencia(data: {
@@ -44,7 +52,7 @@ export async function createIncidencia(data: {
   responsable_id?: number;
 }): Promise<Incidencia> {
   return apiFetch<Incidencia>('/api/v1/incidencias', {
-    service: 'ops',
+    service: 'gateway',
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -59,7 +67,7 @@ export async function updateIncidencia(
   },
 ): Promise<Incidencia> {
   return apiFetch<Incidencia>(`/api/v1/incidencias/${id}`, {
-    service: 'ops',
+    service: 'gateway',
     method: 'PUT',
     body: JSON.stringify(data),
   });
@@ -79,7 +87,7 @@ export async function submitMantenimiento(
   return apiFetch<Mantenimiento>(
     `/api/v1/incidencias/${incidenciaId}/mantenimiento`,
     {
-      service: 'ops',
+      service: 'gateway',
       method: 'POST',
       body: JSON.stringify(data),
     },
@@ -90,7 +98,30 @@ export async function submitMantenimiento(
 
 export async function fetchRepuestos(categoria?: string): Promise<Repuesto[]> {
   const qs = categoria ? `?categoria=${categoria}` : '';
-  return apiFetch<Repuesto[]>(`/api/v1/repuestos${qs}`, { service: 'ops' });
+  return apiFetch<Repuesto[]>(`/api/v1/repuestos${qs}`, { service: 'gateway' });
+}
+
+export async function createRepuesto(data: RepuestoCreate): Promise<Repuesto> {
+  return apiFetch<Repuesto>('/api/v1/repuestos', {
+    service: 'gateway',
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateRepuesto(id: number, data: RepuestoUpdate): Promise<Repuesto> {
+  return apiFetch<Repuesto>(`/api/v1/repuestos/${id}`, {
+    service: 'gateway',
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteRepuesto(id: number): Promise<void> {
+  await apiFetch(`/api/v1/repuestos/${id}`, {
+    service: 'gateway',
+    method: 'DELETE',
+  });
 }
 
 // --- Calibraciones ---
@@ -107,13 +138,13 @@ export async function fetchCalibracionesOps(params?: {
   const qs = searchParams.toString();
   return apiFetch<CalibracionListResponse>(
     `/api/v1/calibraciones${qs ? `?${qs}` : ''}`,
-    { service: 'ops' },
+    { service: 'gateway' },
   );
 }
 
 export async function fetchCalibracion(id: number): Promise<CalibracionOps> {
   return apiFetch<CalibracionOps>(`/api/v1/calibraciones/${id}`, {
-    service: 'ops',
+    service: 'gateway',
   });
 }
 
@@ -126,7 +157,7 @@ export async function createCalibracion(data: {
   proveedor_id?: number;
 }): Promise<CalibracionOps> {
   return apiFetch<CalibracionOps>('/api/v1/calibraciones', {
-    service: 'ops',
+    service: 'gateway',
     method: 'POST',
     body: JSON.stringify(data),
   });
@@ -142,18 +173,123 @@ export async function updateCalibracion(
   },
 ): Promise<CalibracionOps> {
   return apiFetch<CalibracionOps>(`/api/v1/calibraciones/${id}`, {
-    service: 'ops',
+    service: 'gateway',
     method: 'PUT',
     body: JSON.stringify(data),
   });
 }
 
-// --- Usuarios y Proveedores ---
-
-export async function fetchUsuarios(): Promise<Usuario[]> {
-  return apiFetch<Usuario[]>('/api/v1/usuarios', { service: 'ops' });
-}
+// --- Proveedores ---
 
 export async function fetchProveedores(): Promise<Proveedor[]> {
-  return apiFetch<Proveedor[]>('/api/v1/proveedores', { service: 'ops' });
+  return apiFetch<Proveedor[]>('/api/v1/proveedores', { service: 'gateway' });
+}
+
+export async function createProveedor(data: ProveedorCreate): Promise<Proveedor> {
+  return apiFetch<Proveedor>('/api/v1/proveedores', {
+    service: 'gateway',
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateProveedor(id: number, data: ProveedorUpdate): Promise<Proveedor> {
+  return apiFetch<Proveedor>(`/api/v1/proveedores/${id}`, {
+    service: 'gateway',
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteProveedor(id: number): Promise<void> {
+  await apiFetch(`/api/v1/proveedores/${id}`, {
+    service: 'gateway',
+    method: 'DELETE',
+  });
+}
+
+// --- Usuarios ---
+
+export async function fetchUsuarios(): Promise<Usuario[]> {
+  return apiFetch<Usuario[]>('/api/v1/usuarios', { service: 'gateway' });
+}
+
+export async function createUsuario(data: UsuarioCreate): Promise<Usuario> {
+  return apiFetch<Usuario>('/api/v1/usuarios', {
+    service: 'gateway',
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateUsuario(id: number, data: UsuarioUpdate): Promise<Usuario> {
+  return apiFetch<Usuario>(`/api/v1/usuarios/${id}`, {
+    service: 'gateway',
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUsuario(id: number): Promise<void> {
+  await apiFetch(`/api/v1/usuarios/${id}`, {
+    service: 'gateway',
+    method: 'DELETE',
+  });
+}
+
+// --- Reportes ---
+
+export interface ReporteParams {
+  fecha_inicio?: string;
+  fecha_fin?: string;
+  device_id?: string;
+  tipo?: string;
+}
+
+function buildReporteQuery(params?: ReporteParams): string {
+  const searchParams = new URLSearchParams();
+  if (params?.fecha_inicio) searchParams.set('fecha_inicio', params.fecha_inicio);
+  if (params?.fecha_fin) searchParams.set('fecha_fin', params.fecha_fin);
+  if (params?.device_id) searchParams.set('device_id', params.device_id);
+  if (params?.tipo) searchParams.set('tipo', params.tipo);
+  const qs = searchParams.toString();
+  return qs ? `?${qs}` : '';
+}
+
+export async function fetchReportePreview(
+  params?: ReporteParams,
+): Promise<ReportePreviewResponse> {
+  return apiFetch<ReportePreviewResponse>(
+    `/api/v1/reportes/preview${buildReporteQuery(params)}`,
+    { service: 'gateway' },
+  );
+}
+
+export async function downloadReporte(
+  format: 'csv' | 'pdf',
+  params?: ReporteParams,
+): Promise<void> {
+  const url = `${SERVICE_URLS.gateway}/api/v1/reportes/${format}${buildReporteQuery(params)}`;
+  const token =
+    typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  const headers: Record<string, string> = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  const resp = await fetch(url, { headers });
+
+  if (!resp.ok) {
+    const error = await resp.json().catch(() => ({}));
+    throw new Error(error.detail || `HTTP ${resp.status}`);
+  }
+
+  const blob = await resp.blob();
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `reporte_mantenimiento.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
 }

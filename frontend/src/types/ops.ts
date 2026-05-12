@@ -89,3 +89,73 @@ export interface AdjuntoInput {
   filename: string;
   file_url: string;
 }
+
+// --- Create/Update types ---
+
+export interface RepuestoCreate {
+  nombre: string;
+  categoria: string;
+}
+
+export interface RepuestoUpdate {
+  nombre?: string;
+  categoria?: string;
+  estado?: string;
+}
+
+export interface ProveedorCreate {
+  nombre: string;
+}
+
+export interface ProveedorUpdate {
+  nombre?: string;
+  estado?: string;
+}
+
+export interface UsuarioCreate {
+  email: string;
+  nombre: string;
+  apellido: string;
+  rol: string;
+  password: string;
+}
+
+export interface UsuarioUpdate {
+  nombre?: string;
+  apellido?: string;
+  rol?: string;
+  estado?: string;
+  password?: string;
+}
+
+// --- Reportes ---
+
+export interface ReporteRow {
+  id_incidencia: number;
+  device_id: string;
+  equipo_nombre: string;
+  ubicacion: string;
+  modelo: string;
+  marca: string;
+  tipo: string;
+  estado: string;
+  prioridad: string;
+  descripcion: string;
+  responsable: string;
+  fecha_creacion: string;
+  fecha_actualizacion: string;
+  diagnostico: string;
+  acciones_realizadas: string;
+  conclusion: string;
+  fecha_ejecucion: string;
+  repuestos_usados: string;
+  fecha_calibracion: string;
+  proveedor: string;
+  certificado_url: string;
+  nota_calibracion: string;
+}
+
+export interface ReportePreviewResponse {
+  items: ReporteRow[];
+  total: number;
+}

@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { AuthProvider } from '@/lib/auth';
 import Header from '@/components/layout/Header';
+import RouteGuard from '@/components/layout/RouteGuard';
 
 export default function ClientLayout({
   children,
@@ -15,7 +16,9 @@ export default function ClientLayout({
   return (
     <AuthProvider>
       {!isLoginPage && <Header />}
-      {children}
+      <RouteGuard>
+        {children}
+      </RouteGuard>
     </AuthProvider>
   );
 }

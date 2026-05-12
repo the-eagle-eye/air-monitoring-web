@@ -21,11 +21,15 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     }
   });
 
+  const alertasVisibles = alertasResponse.items.filter(
+    (a) => a.nivel_riesgo === 'alta' || a.nivel_riesgo === 'media',
+  );
+
   return {
     equipos,
     latestPredictions,
-    alertas: alertasResponse.items,
-    totalAlertas: alertasResponse.total,
+    alertas: alertasVisibles,
+    totalAlertas: alertasVisibles.length,
   };
 }
 

@@ -5,22 +5,10 @@ import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/lib/auth";
 
-const navItems = [
-  { label: "Inicio", href: "/" },
-  { label: "Dashboard", href: "/dashboard" },
-  { label: "Equipos", href: "/equipos" },
-];
-
-const opsSubitems = [
-  { label: "Incidencias", href: "/incidencias" },
-  { label: "Calibraciones", href: "/calibraciones" },
-];
-
-const navItemsAfter = [
-  { label: "Lecturas", href: "/lecturas" },
-  { label: "Predicciones", href: "/predicciones" },
-  { label: "Alertas", href: "/alertas" },
-];
+interface NavItem {
+  label: string;
+  href: string;
+}
 
 function NavLink({
   href,
@@ -45,12 +33,12 @@ function NavLink({
   );
 }
 
-function OperacionesDropdown() {
+function Dropdown({ label, items }: { label: string; items: NavItem[] }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const isActive = opsSubitems.some((item) => pathname.startsWith(item.href));
+  const isActive = items.some((item) => pathname.startsWith(item.href));
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -72,7 +60,7 @@ function OperacionesDropdown() {
             : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
         }`}
       >
-        Operaciones
+        {label}
         <svg
           className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
@@ -86,7 +74,7 @@ function OperacionesDropdown() {
 
       {open && (
         <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-          {opsSubitems.map((item) => {
+          {items.map((item) => {
             const subActive = pathname.startsWith(item.href);
             return (
               <Link
@@ -115,9 +103,51 @@ const ROL_LABEL: Record<string, string> = {
   coordinador: "Coordinador",
 };
 
+function getNavForRole(rol: string) {
+  const mainItems: NavItem[] = [{ label: "Inicio", href: "/" }];
+
+  if (rol === "administrador" || rol === "coordinador") {
+    mainItems.push({ label: "Dashboard", href: "/dashboard" });
+  } else if (rol === "tecnico") {
+    mainItems.push({ label: "Dashboard", href: "/dashboard-tecnico" });
+  }
+
+  mainItems.push({ label: "Equipos", href: "/equipos" });
+
+  const opsItems: NavItem[] = [];
+  if (rol === "administrador" || rol === "coordinador") {
+    opsItems.push({ label: "Incidencias", href: "/incidencias" });
+    opsItems.push({ label: "Calibraciones", href: "/calibraciones" });
+    opsItems.push({ label: "Reportes", href: "/reportes" });
+  } else if (rol === "tecnico") {
+    opsItems.push({ label: "Incidencias", href: "/incidencias" });
+  }
+
+  const afterItems: NavItem[] = [];
+  if (rol !== "tecnico") {
+    afterItems.push({ label: "Lecturas", href: "/lecturas" });
+    afterItems.push({ label: "Predicciones", href: "/predicciones" });
+    afterItems.push({ label: "Alertas", href: "/alertas" });
+  }
+
+  const adminItems: NavItem[] = [];
+  if (rol === "administrador") {
+    adminItems.push({ label: "Repuestos", href: "/repuestos" });
+    adminItems.push({ label: "Proveedores", href: "/proveedores" });
+    adminItems.push({ label: "Usuarios", href: "/usuarios" });
+  } else if (rol === "tecnico") {
+    adminItems.push({ label: "Repuestos", href: "/repuestos" });
+  }
+
+  return { mainItems, opsItems, afterItems, adminItems };
+}
+
 export default function Header() {
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuth();
+
+  const rol = user?.rol ?? "coordinador";
+  const { mainItems, opsItems, afterItems, adminItems } = getNavForRole(rol);
 
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -129,7 +159,7 @@ export default function Header() {
         </Link>
 
         <nav className="flex items-center gap-1">
-          {navItems.map((item) => {
+          {mainItems.map((item) => {
             const isActive =
               item.href === "/"
                 ? pathname === "/"
@@ -144,9 +174,11 @@ export default function Header() {
             );
           })}
 
-          <OperacionesDropdown />
+          {opsItems.length > 0 && (
+            <Dropdown label="Operaciones" items={opsItems} />
+          )}
 
-          {navItemsAfter.map((item) => {
+          {afterItems.map((item) => {
             const isActive = pathname.startsWith(item.href);
             return (
               <NavLink
@@ -157,6 +189,16 @@ export default function Header() {
               />
             );
           })}
+
+          {adminItems.length > 1 ? (
+            <Dropdown label="Administracion" items={adminItems} />
+          ) : adminItems.length === 1 ? (
+            <NavLink
+              href={adminItems[0].href}
+              label={adminItems[0].label}
+              isActive={pathname.startsWith(adminItems[0].href)}
+            />
+          ) : null}
         </nav>
 
         {isAuthenticated && user && (
