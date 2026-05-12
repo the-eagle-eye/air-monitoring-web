@@ -21,7 +21,7 @@ export default function AlertasTable({ alertas }: AlertasTableProps) {
     {
       key: 'created_at',
       header: 'Fecha',
-      render: (a: Alerta) => new Date(a.created_at).toLocaleString(),
+      render: (a: Alerta) => new Date(a.created_at.endsWith('Z') ? a.created_at : a.created_at + 'Z').toLocaleString(),
     },
     {
       key: 'nivel_riesgo',

@@ -3,7 +3,7 @@ from fastapi import APIRouter, Request, Response
 
 from app.config import settings
 from app.auth.jwt_handler import verify_token
-from app.auth.rbac import is_public_route, check_write_permission
+from app.auth.rbac import is_public_route, check_write_permission, check_read_permission
 
 router = APIRouter()
 
@@ -16,6 +16,9 @@ SERVICE_MAP = {
     "/api/v1/calibraciones": settings.OPS_SERVICE_URL,
     "/api/v1/dashboard": settings.OPS_SERVICE_URL,
     "/api/v1/usuarios": settings.OPS_SERVICE_URL,
+    "/api/v1/repuestos": settings.OPS_SERVICE_URL,
+    "/api/v1/proveedores": settings.OPS_SERVICE_URL,
+    "/api/v1/reportes": settings.OPS_SERVICE_URL,
 }
 
 
@@ -69,6 +72,13 @@ async def proxy(request: Request, path: str):
             )
         # RBAC check for write operations
         if not check_write_permission(full_path, request.method, user["rol"]):
+            return Response(
+                content='{"detail": "No tiene permisos para esta accion"}',
+                status_code=403,
+                media_type="application/json",
+            )
+        # RBAC check for read-restricted routes
+        if not check_read_permission(full_path, user["rol"]):
             return Response(
                 content='{"detail": "No tiene permisos para esta accion"}',
                 status_code=403,

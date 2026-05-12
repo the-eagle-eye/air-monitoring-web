@@ -12,13 +12,13 @@ import numpy as np
 def classify_risk(rul_days: int) -> str:
     """Classify risk level based on RUL.
 
-    - RUL <= 30 → alta
-    - RUL > 30 & < 70 → media
-    - RUL >= 70 → baja
+    - RUL < 30 → alta
+    - 30 <= RUL < 60 → media
+    - RUL >= 60 → baja
     """
-    if rul_days <= 30:
+    if rul_days < 30:
         return "alta"
-    elif rul_days < 70:
+    elif rul_days < 60:
         return "media"
     else:
         return "baja"

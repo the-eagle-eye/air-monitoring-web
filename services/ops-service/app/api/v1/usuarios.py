@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioWithHash
+from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate, UsuarioWithHash
 
 router = APIRouter()
 
@@ -35,6 +35,34 @@ def create_usuario(data: UsuarioCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(usuario)
     return UsuarioResponse.model_validate(usuario)
+
+
+@router.put("/{usuario_id}", response_model=UsuarioResponse)
+def update_usuario(
+    usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_db)
+):
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    updates = data.model_dump(exclude_unset=True)
+    if "password" in updates:
+        password = updates.pop("password")
+        if password:
+            updates["password_hash"] = _hash_password(password)
+    for key, value in updates.items():
+        setattr(usuario, key, value)
+    db.commit()
+    db.refresh(usuario)
+    return UsuarioResponse.model_validate(usuario)
+
+
+@router.delete("/{usuario_id}", status_code=204)
+def delete_usuario(usuario_id: int, db: Session = Depends(get_db)):
+    usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    if not usuario:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    usuario.estado = "inactivo"
+    db.commit()
 
 
 @router.get("/by-email/{email}", response_model=UsuarioWithHash)

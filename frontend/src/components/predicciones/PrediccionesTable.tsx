@@ -17,7 +17,7 @@ export default function PrediccionesTable({
       key: 'prediction_timestamp',
       header: 'Fecha',
       render: (p: Prediccion) =>
-        new Date(p.prediction_timestamp).toLocaleString(),
+        new Date(p.prediction_timestamp.endsWith('Z') ? p.prediction_timestamp : p.prediction_timestamp + 'Z').toLocaleString(),
     },
     {
       key: 'failure_probability',

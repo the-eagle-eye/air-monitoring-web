@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -24,6 +24,7 @@ from app.services import incidencia_service, mantenimiento_service
 
 class AlertTriggerRequest(BaseModel):
     device_id: str
+    nivel_riesgo: str = "alta"
 
 router = APIRouter()
 
@@ -35,10 +36,22 @@ def list_incidencias(
     estado: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    x_user_rol: str | None = Header(None),
+    x_user_id: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
+    # Tecnico can only see correctivas assigned to them
+    responsable_id = None
+    if x_user_rol == "tecnico" and x_user_id:
+        tipo = "correctiva"
+        try:
+            responsable_id = int(x_user_id)
+        except ValueError:
+            pass
+
     items, total = incidencia_service.list_incidencias(
-        db, device_id, tipo, estado, page, page_size
+        db, device_id, tipo, estado, page, page_size,
+        responsable_id=responsable_id,
     )
     return IncidenciaListResponse(
         items=[IncidenciaResponse.model_validate(i) for i in items],
@@ -141,9 +154,9 @@ def evaluar_alertas(db: Session = Depends(get_db)):
 
 @router.post("/alert-trigger", response_model=IncidenciaResponse, status_code=201)
 def alert_trigger(data: AlertTriggerRequest, db: Session = Depends(get_db)):
-    """Crear incidencia correctiva automatica cuando ml-service detecta alerta alta."""
+    """Crear incidencia correctiva automatica cuando ml-service detecta alerta alta o media."""
     incidencia = incidencia_service.create_alert_triggered_incidencia(
-        db, data.device_id, settings.IOT_SERVICE_URL
+        db, data.device_id, settings.IOT_SERVICE_URL, nivel_riesgo=data.nivel_riesgo
     )
     if incidencia is None:
         return JSONResponse(

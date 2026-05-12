@@ -12,16 +12,16 @@ logger = logging.getLogger(__name__)
 
 RISK_DESCRIPTIONS = {
     "alta": (
-        "ALERTA ALTA: RUL <= 30 dias. "
+        "ALERTA ALTA: RUL < 30 dias. "
         "Se requiere intervencion inmediata para evitar falla del equipo."
     ),
     "media": (
-        "ALERTA MEDIA: RUL entre 31 y 69 dias. "
-        "Programar mantenimiento preventivo en las proximas semanas."
+        "ALERTA MEDIA: RUL entre 30 y 59 dias. "
+        "Programar mantenimiento correctivo en las proximas semanas."
     ),
     "baja": (
-        "ALERTA BAJA: RUL >= 70 dias. "
-        "Equipo en condiciones normales de operacion."
+        "ALERTA BAJA: RUL >= 60 dias. "
+        "Equipo bajo monitoreo preventivo."
     ),
 }
 
@@ -41,25 +41,25 @@ def evaluate_and_create_alert(db: Session, prediccion: Prediccion) -> Alerta:
     db.commit()
     db.refresh(alerta)
 
-    if alerta.nivel_riesgo == "alta":
-        _notify_ops_high_alert(prediccion.device_id)
+    if alerta.nivel_riesgo in ("alta", "media"):
+        _notify_ops_alert(prediccion.device_id, alerta.nivel_riesgo)
 
     return alerta
 
 
-def _notify_ops_high_alert(device_id: str) -> None:
+def _notify_ops_alert(device_id: str, nivel_riesgo: str = "alta") -> None:
     """Notificar a ops-service para crear incidencia correctiva (fire-and-forget)."""
     try:
         resp = httpx.post(
             f"{settings.OPS_SERVICE_URL}/api/v1/incidencias/alert-trigger",
-            json={"device_id": device_id},
+            json={"device_id": device_id, "nivel_riesgo": nivel_riesgo},
             timeout=10.0,
         )
         resp.raise_for_status()
-        logger.info("ops-service notificado de alerta alta para %s", device_id)
+        logger.info("ops-service notificado de alerta %s para %s", nivel_riesgo, device_id)
     except Exception:
         logger.exception(
-            "Error notificando a ops-service de alerta alta para %s", device_id
+            "Error notificando a ops-service de alerta %s para %s", nivel_riesgo, device_id
         )
 
 

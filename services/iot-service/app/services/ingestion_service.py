@@ -1,4 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+
+PERU_TZ = timezone(timedelta(hours=-5))
 
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -18,7 +20,7 @@ def validate_and_store_reading(db: Session, payload: LecturaIoTCreate) -> Lectur
 
     timestamp_lectura = datetime.strptime(
         payload.timestamp, "%Y-%m-%d %H:%M:%S"
-    ).replace(tzinfo=timezone.utc)
+    ).replace(tzinfo=PERU_TZ).astimezone(timezone.utc)
 
     lectura = LecturaIoT(
         device_id=equipo.id,

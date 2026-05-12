@@ -8,20 +8,20 @@ Each cycle represents one equipment's full lifecycle from new to failure.
 import numpy as np
 import pandas as pd
 
-# Baseline ranges for healthy equipment (matches simulate_iot.py)
+# Baseline ranges for healthy equipment (real CR310 T101 P5-P95 values)
 SENSOR_BASELINES = {
-    "so2_ppb": (20.0, 50.0),
-    "h2s_ppb": (1.0, 5.0),
-    "reaction_temp": (33.0, 37.0),
-    "izs_temp": (32.0, 36.0),
-    "pmt_temp": (34.0, 38.0),
-    "sample_flow": (440.0, 460.0),
-    "pressure": (29.0, 30.5),
-    "uv_lamp_intensity": (380.0, 420.0),
-    "box_temp": (30.0, 36.0),
-    "hvps_v": (660.0, 680.0),
-    "conv_temp": (34.0, 37.0),
-    "ozone_flow": (470.0, 490.0),
+    "so2_ppb": (-2.2, -1.3),
+    "h2s_ppb": (-1.4, -0.3),
+    "reaction_temp": (49.7, 50.1),
+    "izs_temp": (0.0, 0.0),
+    "pmt_temp": (8.5, 10.0),
+    "sample_flow": (590.0, 640.0),
+    "pressure": (17.2, 18.5),
+    "uv_lamp_intensity": (1930.0, 1955.0),
+    "box_temp": (33.9, 35.3),
+    "hvps_v": (643.0, 648.0),
+    "conv_temp": (312.0, 314.0),
+    "ozone_flow": (0.0, 0.0),
 }
 
 SENSOR_NAMES = list(SENSOR_BASELINES.keys())
@@ -64,30 +64,34 @@ def _generate_one_cycle(
 
         # Apply degradation patterns based on sensor type
         if sensor == "uv_lamp_intensity":
-            # UV lamp degrades linearly, losing up to 40% at end of life
-            degradation = baseline * 0.4 * progress
+            # UV lamp degrades linearly, losing up to 50% at end of life
+            degradation = baseline * 0.50 * progress
             values -= degradation
         elif sensor in ("reaction_temp", "box_temp", "conv_temp"):
             # Temperatures increase as equipment degrades
-            drift = (high - low) * 1.5 * progress
+            drift = (high - low) * 2.0 * progress
             values += drift
-        elif sensor in ("sample_flow", "ozone_flow"):
-            # Flows decrease as equipment degrades
-            degradation = baseline * 0.25 * progress
+        elif sensor == "sample_flow":
+            # Flow decreases as equipment degrades
+            degradation = baseline * 0.35 * progress
             values -= degradation
         elif sensor == "hvps_v":
             # HVPS becomes unstable near end of life
-            instability = progress ** 2 * (high - low) * 3
+            instability = progress ** 2 * (high - low) * 4
             values += rng.normal(0, 1, n_samples) * instability
         elif sensor in ("so2_ppb", "h2s_ppb"):
-            # Measurement drift increases with degradation
-            drift = baseline * 0.3 * progress
+            # Measurement drift increases with degradation (positive drift)
+            drift = abs(baseline) * 0.45 * progress
+            values += drift
+        elif sensor == "pmt_temp":
+            # PMT overheats near failure
+            drift = (high - low) * 1.2 * progress
             values += drift
 
         # Add random anomalies that increase near failure
-        anomaly_prob = 0.01 + 0.15 * progress**2
+        anomaly_prob = 0.02 + 0.20 * progress**2
         anomaly_mask = rng.random(n_samples) < anomaly_prob
-        anomaly_magnitude = rng.uniform(0.5, 2.0, n_samples) * (high - low)
+        anomaly_magnitude = rng.uniform(1.0, 3.0, n_samples) * (high - low if (high - low) > 0 else 1.5)
         anomaly_sign = rng.choice([-1, 1], n_samples)
         values[anomaly_mask] += (anomaly_magnitude * anomaly_sign)[anomaly_mask]
 

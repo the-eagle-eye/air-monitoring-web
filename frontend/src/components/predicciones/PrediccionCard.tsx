@@ -39,7 +39,7 @@ export default function PrediccionCard({ prediccion }: PrediccionCardProps) {
       <div className="mt-3 border-t border-zinc-100 pt-2 dark:border-zinc-700">
         <p className="text-xs text-zinc-400">
           Modelo: {prediccion.model_version} |{' '}
-          {new Date(prediccion.prediction_timestamp).toLocaleString()}
+          {new Date(prediccion.prediction_timestamp.endsWith('Z') ? prediccion.prediction_timestamp : prediccion.prediction_timestamp + 'Z').toLocaleString()}
         </p>
       </div>
     </div>

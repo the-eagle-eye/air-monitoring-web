@@ -70,6 +70,39 @@ def create_reading(payload: LecturaIoTCreate, db: Session = Depends(get_db)):
     return _lectura_to_response(lectura)
 
 
+@router.get("/readings/all", response_model=list[LecturaIoTResponse])
+def get_all_readings_unpaged(db: Session = Depends(get_db)):
+    items = (
+        db.query(LecturaIoT)
+        .join(Equipo, LecturaIoT.device_id == Equipo.id)
+        .order_by(LecturaIoT.timestamp_lectura.desc())
+        .all()
+    )
+    return [_lectura_to_response(item) for item in items]
+
+
+@router.get("/readings", response_model=LecturaIoTListResponse)
+def get_all_readings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=300),
+    db: Session = Depends(get_db),
+):
+    query = (
+        db.query(LecturaIoT)
+        .join(Equipo, LecturaIoT.device_id == Equipo.id)
+        .order_by(LecturaIoT.timestamp_lectura.desc())
+    )
+    total = query.count()
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    return LecturaIoTListResponse(
+        items=[_lectura_to_response(item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
 @router.get("/readings/{device_id}", response_model=LecturaIoTListResponse)
 def get_readings(
     device_id: str,

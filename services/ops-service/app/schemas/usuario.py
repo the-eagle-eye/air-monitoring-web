@@ -22,5 +22,13 @@ class UsuarioResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class UsuarioUpdate(BaseModel):
+    nombre: str | None = None
+    apellido: str | None = None
+    rol: str | None = None
+    estado: str | None = None
+    password: str | None = Field(None, min_length=6)
+
+
 class UsuarioWithHash(UsuarioResponse):
     password_hash: str | None = None
