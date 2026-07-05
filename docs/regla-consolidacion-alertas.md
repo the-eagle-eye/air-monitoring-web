@@ -121,3 +121,47 @@ Los scripts `simulate_*.py` tienen valores etiquetados por estado que, contra el
 real de cada estación, pueden caer en una banda distinta a su etiqueta (p.ej.
 CA-UCHU-01 "OBSERVADO" produce `err≈1.11` → banda EN_RIESGO). Es cosmético (nombres
 en el script); el comportamiento del sistema es correcto.
+
+---
+
+## §C9 — Ventana de mantenimiento (silenciamiento por intervención activa)
+
+**Problema.** Cuando un técnico está interviniendo físicamente un equipo, sus lecturas
+son anómalas por diseño (se manipula el sensor, se cambian piezas). Sin silenciar, el
+monitor generaría/escalaría incidencias ruidosas sobre un equipo que ya está siendo
+atendido.
+
+**Solución (derivada, sin flag persistido).** La "ventana de mantenimiento" se deriva
+del estado ITIL de la incidencia:
+
+- **Inicio:** el coordinador asigna un técnico → la correctiva pasa `pendiente`→
+  `en_ejecucion` (sella `fecha_asignacion`). El equipo entra en ventana.
+- **Fin:** la incidencia se cierra (`finalizado`/`cancelado`). El equipo sale.
+
+**Comportamiento durante la ventana.** La regla de consolidación hace **noop total**
+(ni crea ni escala; devuelve acción `maintenance`). Sólo el estado `en_ejecucion`
+silencia:
+
+| Estado de la correctiva | ¿Silencia? | Razón |
+|---|---|---|
+| `pendiente` (sin asignar) | ❌ No — aún escala urgencia | nadie la atiende todavía |
+| `en_ejecucion` (asignada) | ✅ Sí — noop total | intervención activa, anomalías esperadas |
+| `resuelto` (trabajo hecho, sin verificar) | ❌ No | no debe enmascarar una reincidencia |
+| `finalizado`/`cancelado` | ❌ No (ventana terminada) | vuelve a operar el monitor |
+
+El origen no importa: una correctiva **manual** en `en_ejecucion` también silencia
+(es una intervención real).
+
+**Implementación.** Choke point único `create_or_escalate_monitor_incidencia`
+(`incidencia_service.py`): antes del dedup/escalada, `_device_in_maintenance_window`
+consulta si el equipo tiene una correctiva en `_MAINTENANCE_STATES = ("en_ejecucion",)`.
+Es estado local de ops → **sin llamada cross-service**. Fail-safe: si la consulta
+fallara, no silencia (prefiere alertar de más antes que ocultar una falla real).
+El watchdog de transmisión ya silenciaba `SIN_TRANSMISION` por incidencia abierta
+(CT-05), que cubre también el caso de mantenimiento.
+
+**Tests.** ops `test_incidencias.py::TestC9VentanaMantenimiento`:
+- **C9-01** `en_ejecucion` silencia (nueva anomalía peor → `maintenance`, no escala).
+- **C9-02** `pendiente` sin asignar aún escala (la ventana no arrancó).
+- **C9-03** al cerrar termina la ventana (nueva anomalía → `created`).
+- **C9-04** correctiva manual en `en_ejecucion` también silencia.

@@ -31,13 +31,19 @@ class HealthEvaluateResponse(BaseModel):
 
 
 class HealthReadingPoint(BaseModel):
-    """Un punto de la serie histórica (para el gráfico recon_error + θ)."""
+    """Un punto de la serie histórica (para el gráfico recon_error + θ).
+
+    M3: incluye el desglose de los dos detectores del ensemble por lectura.
+    El veredicto del autoencoder se deriva en el cliente como (recon_error > theta).
+    """
 
     timestamp: datetime
     recon_error: float | None
     theta: float | None
     health_state: str
     and_alert: bool
+    if_anomaly: bool | None = None  # veredicto Isolation Forest (M3)
+    severity: str | None = None     # Advertencia/Alerta/Crítico (M3)
 
 
 class HealthReadingsResponse(BaseModel):

@@ -36,7 +36,7 @@ están implementados y verificados; se listan para dar contexto.
 | # | Item | Estado | Notas |
 |---|---|---|---|
 | C8 | **Onboarding automatizado de estación nueva** | ❌ Pendiente | Hoy 100% manual (correr scripts). Flujo auto: detectar → warm-up → entrenar → activar θ. Requiere scheduler (ya existe). |
-| C9 | **Silenciamiento por mantenimiento (ventana explícita)** | ⚠️ Parcial | Hoy se silencia por incidencia abierta. Falta un modo "en mantenimiento" con ventana temporal explícita si se requiere. |
+| C9 | **Silenciamiento por mantenimiento (ventana explícita)** | ✅ HECHO (2026-07-05) | Ventana de mantenimiento DERIVADA del estado ITIL (sin flag persistido): arranca al asignar técnico (correctiva `pendiente`→`en_ejecucion`) y termina al cerrar (`finalizado`/`cancelado`). Durante la ventana la regla de consolidación hace **noop total** (ni crea ni escala; acción `maintenance`) — las anomalías durante la intervención son esperadas. Sólo `en_ejecucion` silencia: `pendiente` aún escala urgencia, `resuelto` no enmascara reincidencias. Choke point único `create_or_escalate_monitor_incidencia` (`_device_in_maintenance_window`), sin llamada cross-service (estado local de ops), fail-safe. Tests ops `TestC9VentanaMantenimiento` (C9-01..04). Ver `regla-consolidacion-alertas.md §C9`. |
 | C10 | **Validación de escala de sensores en ingesta** | ✅ HECHO (2026-07-05) | `ensemble_notify_service` valida que las 4 features caigan en el rango físico de la escala OEFA (`OEFA_RANGES`; discriminadores claros: flow>10 o lamp>300 = escala Thermo). Fuera de rango → `valido=0` → gate §3.0 → SIN_DATOS (fallback seguro), evitando el `recon_error`~1e9. NO convierte unidades (no se conoce la fórmula); rechaza limpiamente. Verificado E2E: lectura Thermo → SIN_DATOS; lectura OEFA → SANO normal. Tests: iot `test_ensemble_notify.py` (rechazo Thermo, aceptación OEFA, frontera, parcial, E2E) + ml `test_health_service.py` (defensa en profundidad: el ensemble sigue robusto). Ver `memory/project_c1_scale_bug.md`. |
 
 ---
@@ -59,7 +59,7 @@ están implementados y verificados; se listan para dar contexto.
 |---|---|---|
 | M1 | **6.ª feature multi-gas** | Incorporar H2S/CO o columnas extra al ensemble. |
 | M2 | **θ adaptativo continuo** | Ventana móvil en vez de recalibración periódica. |
-| M3 | **Panel detalle de los 2 detectores** | Por lectura: AE dice X, IF dice Y, AND → alerta (poc-dashboard §3.2). |
+| M3 | **Panel detalle de los 2 detectores** | ✅ HECHO (2026-07-05). Por lectura: AE (error vs θ) · IF (anómalo) · AND → estado (poc-dashboard §3.2). Datos ya persistidos (`health_readings`: `recon_error`, `theta`, `if_anomaly`, `and_alert`, `severity`; el veredicto AE se deriva como `recon_error > theta`) — sin migración. Backend: `if_anomaly`+`severity` añadidos a `HealthReadingPoint` schema + endpoint `/readings`. Frontend: `DetectorBreakdownPanel` en tab Salud + tooltip enriquecido en `ReconErrorChart`. Tests: ml `test_m3_readings_*` (2), e2e breakdown panel. |
 | M4 | **Reincorporar CA-CHILLO-01** | Excluida por varianza colapsada; reincorporar con datos de régimen estable. |
 
 ---

@@ -2,6 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import type { HealthReadingPoint } from '@/types/healthMonitor';
+import { HEALTH_STATE_CONFIG, type HealthState } from '@/types/healthMonitor';
 
 function parseUTC(ts: string): Date {
   return new Date(ts.endsWith('Z') ? ts : ts + 'Z');
@@ -12,8 +13,18 @@ function formatTimestamp(ts: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+// M3: un punto del gráfico con el desglose de los 2 detectores.
+interface ChartPoint {
+  timestamp: string;
+  recon_error: number | null;
+  theta: number | null;
+  if_anomaly: boolean | null;
+  and_alert: boolean;
+  health_state: HealthState;
+}
+
 interface ChartContentProps {
-  data: { timestamp: string; recon_error: number | null }[];
+  data: ChartPoint[];
   theta: number | null;
 }
 
@@ -32,6 +43,57 @@ const Chart = dynamic(
         ResponsiveContainer,
       } = mod;
 
+      // M3: tooltip con el desglose de los 2 detectores para la lectura.
+      function DetectorTooltip({ active, payload }: {
+        active?: boolean;
+        payload?: { payload: ChartPoint }[];
+      }) {
+        if (!active || !payload || payload.length === 0) return null;
+        const p = payload[0].payload;
+        const th = p.theta;
+        // veredicto del autoencoder = (recon_error > θ)
+        const aeAnom =
+          p.recon_error != null && th != null ? p.recon_error > th : null;
+        const cfg = HEALTH_STATE_CONFIG[p.health_state];
+        const row = (label: string, verdict: boolean | null, detail?: string) => (
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-zinc-400">{label}</span>
+            <span className={
+              verdict == null ? 'text-zinc-500'
+                : verdict ? 'font-medium text-red-400' : 'font-medium text-green-400'
+            }>
+              {verdict == null ? '—' : verdict ? 'Anomalía' : 'Normal'}
+              {detail ? ` ${detail}` : ''}
+            </span>
+          </div>
+        );
+        return (
+          <div style={{
+            backgroundColor: '#18181b', border: '1px solid #3f3f46',
+            borderRadius: 8, color: '#fafafa', fontSize: 12, padding: '10px 12px',
+            minWidth: 220,
+          }}>
+            <div className="mb-2 font-medium">{p.timestamp}</div>
+            {row(
+              'Autoencoder',
+              aeAnom,
+              p.recon_error != null && th != null
+                ? `(err ${p.recon_error.toExponential(2)} vs θ ${th.toExponential(2)})`
+                : undefined,
+            )}
+            {row('Isolation Forest', p.if_anomaly ?? null)}
+            <div className="my-1.5 border-t border-zinc-700" />
+            {row('Compuerta AND', p.and_alert)}
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <span className="text-zinc-400">Estado</span>
+              <span style={{ color: cfg.color }} className="font-medium">
+                {cfg.emoji} {cfg.label}
+              </span>
+            </div>
+          </div>
+        );
+      }
+
       function ReconLineChart({ data, theta }: ChartContentProps) {
         return (
           <ResponsiveContainer width="100%" height={300}>
@@ -39,15 +101,7 @@ const Chart = dynamic(
               <CartesianGrid strokeDasharray="3 3" stroke="#a1a1aa40" />
               <XAxis dataKey="timestamp" tick={{ fontSize: 11 }} stroke="#a1a1aa" />
               <YAxis tick={{ fontSize: 11 }} stroke="#a1a1aa" />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#18181b',
-                  border: '1px solid #3f3f46',
-                  borderRadius: '8px',
-                  color: '#fafafa',
-                  fontSize: 12,
-                }}
-              />
+              <Tooltip content={<DetectorTooltip />} />
               <Legend />
               <Line
                 type="monotone"
@@ -85,9 +139,13 @@ interface ReconErrorChartProps {
 // (poc-dashboard §3.2). Visible a todos los roles (decisión §7.2).
 export default function ReconErrorChart({ points, loading }: ReconErrorChartProps) {
   const theta = points.find((p) => p.theta != null)?.theta ?? null;
-  const data = points.map((p) => ({
+  const data: ChartPoint[] = points.map((p) => ({
     timestamp: formatTimestamp(p.timestamp),
     recon_error: p.recon_error,
+    theta: p.theta,
+    if_anomaly: p.if_anomaly ?? null,
+    and_alert: p.and_alert,
+    health_state: p.health_state,
   }));
 
   return (

@@ -46,6 +46,8 @@ def device_readings(device_id: str, limit: int = 300, db: Session = Depends(get_
                 "theta": r.theta,
                 "health_state": r.health_state,
                 "and_alert": r.and_alert,
+                "if_anomaly": r.if_anomaly,  # M3: veredicto Isolation Forest
+                "severity": r.severity,      # M3: severidad de la lectura
             }
             for r in rows
         ],

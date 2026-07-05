@@ -242,6 +242,32 @@ MONITOR_ORIGEN = "monitor_salud"
 # ITIL I2.5: 'resuelto' cuenta como ABIERTO (dedup no crea duplicados hasta el
 # cierre verificado/finalizado). Debe coincidir con el watchdog del ml-service.
 _OPEN_STATES = ("pendiente", "en_ejecucion", "resuelto")
+# C9: ventana de mantenimiento. Cuando un equipo tiene una correctiva EN EJECUCIÓN
+# (técnico asignado e interviniendo), sus anomalías son ESPERADAS: el monitor las
+# silencia por completo (ni crea ni escala) hasta que la incidencia se cierra.
+# Sólo 'en_ejecucion' silencia: 'pendiente' aún deja escalar la urgencia mientras
+# nadie atiende, y 'resuelto' (trabajo hecho, sin verificar) no debe enmascarar una
+# reincidencia. El origen no importa: una correctiva manual también es intervención.
+_MAINTENANCE_STATES = ("en_ejecucion",)
+
+
+def _device_in_maintenance_window(db: Session, device_id: str) -> bool:
+    """C9: True si el equipo está bajo intervención activa (correctiva en_ejecucion).
+
+    docs/regla-consolidacion-alertas.md §C9. La ventana se deriva del estado ITIL
+    (no hay flag persistido): arranca al asignar técnico (pendiente→en_ejecucion) y
+    termina al cerrar (finalizado/cancelado). Es estado local de ops → sin llamada
+    cross-service.
+    """
+    return (
+        db.query(Incidencia)
+        .filter(
+            Incidencia.device_id == device_id,
+            Incidencia.tipo == "correctiva",
+            Incidencia.estado.in_(_MAINTENANCE_STATES),
+        )
+        .first()
+    ) is not None
 # severidad del ensemble -> prioridad del incidente
 _SEVERITY_PRIORITY = {
     "OBSERVADO": "baja",
@@ -263,12 +289,23 @@ def create_or_escalate_monitor_incidencia(
     - creacion: si no hay abierto del monitor, crea uno (CA-01/02/03). Como solo
       mira los ABIERTOS, tras cerrar uno se puede crear otro nuevo (CA-06).
     - una calibracion manual abierta NO bloquea (filtra origen+tipo) (CA-07).
+    - C9: si el equipo está en ventana de mantenimiento (correctiva en_ejecucion),
+      silencia por completo (accion 'maintenance').
 
-    Retorna (incidencia, accion) donde accion in {created, escalated, noop}.
+    Retorna (incidencia, accion) donde accion in {created, escalated, noop, maintenance}.
     """
     urgencia = priority_service.urgency_from_severity(severidad)
     if severidad not in _SEVERITY_PRIORITY:
         return None, "noop"
+    # C9: si el equipo está en ventana de mantenimiento (correctiva en_ejecucion),
+    # silenciar por completo — las anomalías durante la intervención son esperadas.
+    # Ni crea ni escala; el monitor vuelve a actuar al cerrarse la incidencia.
+    if _device_in_maintenance_window(db, device_id):
+        logger.info(
+            "Anomalia %s silenciada: equipo %s en ventana de mantenimiento (C9)",
+            severidad, device_id,
+        )
+        return None, "maintenance"
     # ITIL: prioridad = matriz(impacto=criticidad del equipo × urgencia=severidad)
     impacto = _equipo_criticidad(iot_service_url, device_id) \
         if iot_service_url else "media"

@@ -172,6 +172,7 @@ def monitor_alert(data: MonitorAlertRequest, db: Session = Depends(get_db)):
 
     Un unico incidente correctivo abierto por equipo (origen=monitor_salud):
     crea, escala prioridad o no hace nada segun la severidad recibida.
+    C9: si el equipo esta en ventana de mantenimiento devuelve accion 'maintenance'.
     """
     incidencia, accion = incidencia_service.create_or_escalate_monitor_incidencia(
         db, data.device_id, data.severidad, settings.IOT_SERVICE_URL
@@ -190,5 +191,5 @@ def monitor_alert(data: MonitorAlertRequest, db: Session = Depends(get_db)):
                      "incidencia": IncidenciaResponse.model_validate(
                          incidencia).model_dump(mode="json")},
         )
-    # noop: severidad no anomala, o ya existe abierto sin escalada
-    return JSONResponse(status_code=200, content={"accion": "noop"})
+    # noop (severidad no anomala / abierto sin escalada) o maintenance (C9 silencio)
+    return JSONResponse(status_code=200, content={"accion": accion})

@@ -372,3 +372,39 @@ def test_disparo_no_rompe_si_ops_cae(db_session, bundle_factory, monkeypatch):
     bundle_factory("DEVB", recon_error=0.10, if_anomaly=True, theta=0.02)
     out = hs.evaluate(db_session, _req("DEVB"))  # no debe lanzar
     assert out["and_alert"] is True
+
+
+# --------------------------------------------------------------------------
+# M3 — el endpoint /readings expone el desglose de los 2 detectores por lectura
+# (recon_error, θ, veredicto IF, resultado AND, severidad). El veredicto del AE
+# se deriva en el cliente como (recon_error > theta).
+# --------------------------------------------------------------------------
+def test_m3_readings_expone_desglose_detectores(db_session, bundle_factory,
+                                                 client, capture_post):
+    # una lectura CRITICO: AE error alto, IF anómalo -> AND alerta
+    bundle_factory("DEVM3", recon_error=0.10, if_anomaly=True, theta=0.02)
+    hs.evaluate(db_session, _req("DEVM3"))
+
+    resp = client.get("/api/v1/health-monitor/DEVM3/readings")
+    assert resp.status_code == 200
+    points = resp.json()["points"]
+    assert len(points) >= 1
+    p = points[-1]  # la lectura recién creada
+    # campos del desglose presentes y coherentes
+    assert p["if_anomaly"] is True          # Isolation Forest: anómalo
+    assert p["and_alert"] is True           # compuerta AND: alerta
+    assert p["recon_error"] > p["theta"]    # AE (derivado): error > θ
+    assert p["severity"] is not None        # severidad de la lectura
+
+
+def test_m3_readings_if_normal_no_alerta(db_session, bundle_factory, client):
+    # AE error alto pero IF normal -> AND NO alerta (falso positivo evitado);
+    # el desglose debe reflejar if_anomaly=False y and_alert=False.
+    bundle_factory("DEVM3B", recon_error=0.05, if_anomaly=False, theta=0.02)
+    hs.evaluate(db_session, _req("DEVM3B"))
+
+    resp = client.get("/api/v1/health-monitor/DEVM3B/readings")
+    assert resp.status_code == 200
+    p = resp.json()["points"][-1]
+    assert p["if_anomaly"] is False
+    assert p["and_alert"] is False

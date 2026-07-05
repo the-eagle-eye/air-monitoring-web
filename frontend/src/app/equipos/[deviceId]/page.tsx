@@ -9,6 +9,7 @@ import { fetchEquipo, updateEquipo, fetchLecturas } from '@/lib/api/lecturas';
 import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
 import { fetchHealthReadings } from '@/lib/api/healthMonitor';
 import ReconErrorChart from '@/components/dashboard/ReconErrorChart';
+import DetectorBreakdownPanel from '@/components/dashboard/DetectorBreakdownPanel';
 import HealthStateBadge from '@/components/dashboard/HealthStateBadge';
 import { readSensor } from '@/lib/sensorFields';
 import EquipoForm from '@/components/equipos/EquipoForm';
@@ -456,6 +457,7 @@ export default function EquipoDetailPage() {
               </span>
             </div>
           )}
+          <DetectorBreakdownPanel reading={latestHealth} />
           <ReconErrorChart points={healthPoints} />
         </div>
       )}

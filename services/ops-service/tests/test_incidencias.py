@@ -217,11 +217,12 @@ class TestConsolidacionMonitorSalud:
         assert resp.json()["accion"] == "created"
 
     def test_ca07_correctiva_manual_no_bloquea(self, client):
-        # una correctiva manual (no del monitor) tampoco bloquea al monitor
+        # una correctiva manual (no del monitor) EN PENDIENTE tampoco bloquea al
+        # monitor: sólo 'en_ejecucion' (intervención activa) silencia (C9).
         client.post("/api/v1/incidencias", json={
-            "device_id": "CA-UCHU-01", "tipo": "correctiva", "origen": "manual",
+            "device_id": "CA-UCHU-02", "tipo": "correctiva", "origen": "manual",
         })
-        resp = self._monitor_alert(client, "CA-UCHU-01", "OBSERVADO")
+        resp = self._monitor_alert(client, "CA-UCHU-02", "OBSERVADO")
         assert resp.status_code == 201
         assert resp.json()["accion"] == "created"
 
@@ -231,3 +232,75 @@ class TestConsolidacionMonitorSalud:
         assert resp.status_code == 200
         assert resp.json()["accion"] == "noop"
         assert len(self._open_monitor_incidencias(client, "CA-CH-04")) == 0
+
+
+class TestC9VentanaMantenimiento:
+    """C9: ventana de mantenimiento silencia el monitor mientras el equipo está
+    bajo intervención activa (correctiva en_ejecucion).
+    docs/regla-consolidacion-alertas.md §C9."""
+
+    _DEV = "CA-MANT-01"
+    _TECNICO_ID = 2  # seed conftest: tecnico@test.com
+
+    def _monitor_alert(self, client, severidad, device_id=None):
+        return client.post("/api/v1/incidencias/monitor-alert", json={
+            "device_id": device_id or self._DEV, "severidad": severidad,
+        })
+
+    def _asignar(self, client, inc_id):
+        """Coordinador asigna técnico -> pendiente pasa a en_ejecucion (ITIL)."""
+        return client.put(f"/api/v1/incidencias/{inc_id}",
+                          json={"responsable_id": self._TECNICO_ID})
+
+    # C9-01: en_ejecucion (técnico asignado) -> anomalía silenciada por completo
+    def test_c9_01_en_ejecucion_silencia(self, client):
+        r1 = self._monitor_alert(client, "EN_RIESGO")
+        inc_id = r1.json()["incidencia"]["id"]
+        assert self._asignar(client, inc_id).json()["estado"] == "en_ejecucion"
+
+        # nueva anomalía (peor severidad) -> NO escala, silenciada
+        resp = self._monitor_alert(client, "CRITICO")
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "maintenance"
+
+        # la incidencia conserva su prioridad (no escaló a alta)
+        got = client.get(f"/api/v1/incidencias/{inc_id}").json()
+        assert got["prioridad"] != "alta"
+        assert got["estado"] == "en_ejecucion"
+
+    # C9-02: pendiente (sin asignar) SÍ escala — la ventana aún no arrancó
+    def test_c9_02_pendiente_aun_escala(self, client):
+        dev = "CA-MANT-02"
+        self._monitor_alert(client, "OBSERVADO", device_id=dev)  # baja, pendiente
+        resp = self._monitor_alert(client, "CRITICO", device_id=dev)  # -> alta
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "escalated"
+        assert resp.json()["incidencia"]["prioridad"] == "alta"
+
+    # C9-03: al cerrar la incidencia, la ventana termina y el monitor vuelve a crear
+    def test_c9_03_cierre_termina_ventana(self, client):
+        dev = "CA-MANT-03"
+        r1 = self._monitor_alert(client, "EN_RIESGO", device_id=dev)
+        inc_id = r1.json()["incidencia"]["id"]
+        self._asignar(client, inc_id)  # en_ejecucion (ventana activa)
+        # cerrar por el ciclo válido: en_ejecucion -> cancelado
+        client.put(f"/api/v1/incidencias/{inc_id}", json={"estado": "cancelado"})
+
+        # ventana terminada -> nueva anomalía crea otra incidencia
+        resp = self._monitor_alert(client, "EN_RIESGO", device_id=dev)
+        assert resp.status_code == 201
+        assert resp.json()["accion"] == "created"
+        assert resp.json()["incidencia"]["id"] != inc_id
+
+    # C9-04: una correctiva MANUAL en_ejecucion también silencia (intervención real)
+    def test_c9_04_correctiva_manual_tambien_silencia(self, client):
+        dev = "CA-MANT-04"
+        created = client.post("/api/v1/incidencias", json={
+            "device_id": dev, "tipo": "correctiva", "origen": "manual",
+        })
+        inc_id = created.json()["id"]
+        self._asignar(client, inc_id)  # manual correctiva -> en_ejecucion
+
+        resp = self._monitor_alert(client, "CRITICO", device_id=dev)
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "maintenance"

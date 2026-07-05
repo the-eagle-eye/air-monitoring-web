@@ -23,8 +23,8 @@ const MOCK_EQUIPO = {
 const MOCK_HEALTH_READINGS = {
   device_id: DEVICE_ID,
   points: [
-    { timestamp: new Date(Date.now() - 3600_000).toISOString(), recon_error: 0.03, theta: 0.05, health_state: 'SANO', and_alert: false },
-    { timestamp: new Date().toISOString(), recon_error: 0.02, theta: 0.05, health_state: 'SANO', and_alert: false },
+    { timestamp: new Date(Date.now() - 3600_000).toISOString(), recon_error: 0.03, theta: 0.05, health_state: 'SANO', and_alert: false, if_anomaly: false, severity: null },
+    { timestamp: new Date().toISOString(), recon_error: 0.02, theta: 0.05, health_state: 'SANO', and_alert: false, if_anomaly: false, severity: null },
   ],
 };
 
@@ -94,6 +94,15 @@ test.describe('Equipo detail page', () => {
   test('clicking Salud tab shows recon error chart', async ({ page }) => {
     await page.getByRole('button', { name: 'Salud' }).click();
     await expect(page.getByText(/reconstrucci.n|umbral|θ/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  // M3: panel de desglose de los 2 detectores en el tab Salud
+  test('Salud tab shows detector breakdown panel (AE / IF / AND)', async ({ page }) => {
+    await page.getByRole('button', { name: 'Salud' }).click();
+    await expect(page.getByText(/desglose de detectores/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Autoencoder/i).first()).toBeVisible();
+    await expect(page.getByText(/Isolation Forest/i).first()).toBeVisible();
+    await expect(page.getByText(/Compuerta AND/i).first()).toBeVisible();
   });
 
   test('clicking Lecturas tab shows sensor data', async ({ page }) => {

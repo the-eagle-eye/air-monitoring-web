@@ -27,6 +27,10 @@ export interface HealthReadingPoint {
   theta: number | null;
   health_state: HealthState;
   and_alert: boolean;
+  // M3: desglose de los 2 detectores por lectura. El veredicto del autoencoder
+  // se deriva como (recon_error > theta); el de Isolation Forest es if_anomaly.
+  if_anomaly?: boolean | null;
+  severity?: string | null;
 }
 
 export interface HealthReadingsResponse {
