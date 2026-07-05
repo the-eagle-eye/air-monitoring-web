@@ -12,6 +12,8 @@ import SensorTrendsChart from '@/components/dashboard/SensorTrendsChart';
 import EquiposAtencion from '@/components/dashboard/EquiposAtencion';
 import IncidenciasSummary from '@/components/dashboard/IncidenciasSummary';
 import ProximasCalibraciones from '@/components/dashboard/ProximasCalibraciones';
+import EquiposReincidentes from '@/components/dashboard/EquiposReincidentes';
+import { useAuth } from '@/lib/auth';
 import { fetchDashboardData, fetchEquipoLecturas } from '@/lib/api/dashboard';
 import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
 import { fetchHealthStates } from '@/lib/api/healthMonitor';
@@ -80,6 +82,9 @@ function computeHealthDistribution(
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  // Coordinador/admin gestionan problemas (crear a partir de reincidentes).
+  const canCrearProblema = user?.rol === 'coordinador' || user?.rol === 'administrador';
   const [dashData, setDashData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -209,8 +214,10 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <IncidenciasSummary incidencias={openIncidencias} />
-        <ProximasCalibraciones calibraciones={pendingCalibraciones} />
+        <EquiposReincidentes canCrear={canCrearProblema} onProblemaCreado={() => loadDashboard(true)} />
       </div>
+
+      <ProximasCalibraciones calibraciones={pendingCalibraciones} />
 
       <AnomalyTrendsChart
         selectedEquipo={selectedEquipo}

@@ -364,3 +364,41 @@ export async function updateProblema(
     body: JSON.stringify(data),
   });
 }
+
+// ITIL: equipos con correctivas recurrentes -> sugerencia de abrir un Problema.
+export interface EquipoReincidente {
+  device_id: string;
+  correctivas: number;
+  desde: string;
+  incidencia_ids: number[];
+}
+
+export interface ReincidentesResponse {
+  dias: number;
+  min_correctivas: number;
+  items: EquipoReincidente[];
+}
+
+export async function fetchReincidentes(params?: {
+  dias?: number;
+  min_correctivas?: number;
+}): Promise<ReincidentesResponse> {
+  const sp = new URLSearchParams();
+  if (params?.dias) sp.set('dias', String(params.dias));
+  if (params?.min_correctivas) sp.set('min_correctivas', String(params.min_correctivas));
+  const qs = sp.toString();
+  return apiFetch<ReincidentesResponse>(
+    `/api/v1/problemas/reincidentes${qs ? `?${qs}` : ''}`,
+    { service: 'gateway' },
+  );
+}
+
+export interface ProblemasResumen {
+  por_estado: Record<string, number>;
+  abiertos: number;
+  total: number;
+}
+
+export async function fetchProblemasResumen(): Promise<ProblemasResumen> {
+  return apiFetch<ProblemasResumen>('/api/v1/problemas/resumen', { service: 'gateway' });
+}

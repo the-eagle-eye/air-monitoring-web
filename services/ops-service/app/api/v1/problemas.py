@@ -33,6 +33,26 @@ def create_problema(data: ProblemaCreate, db: Session = Depends(get_db)):
         problema_service.create_problema(db, data))
 
 
+# ITIL: equipos con correctivas recurrentes -> SUGERENCIA de abrir un Problema.
+# Debe ir ANTES de /{problema_id} para no ser capturada como problema_id.
+@router.get("/reincidentes")
+def reincidentes(
+    dias: int = Query(90, ge=1, le=365),
+    min_correctivas: int = Query(3, ge=2, le=20),
+    db: Session = Depends(get_db),
+):
+    return {
+        "dias": dias,
+        "min_correctivas": min_correctivas,
+        "items": problema_service.detect_reincidentes(db, dias, min_correctivas),
+    }
+
+
+@router.get("/resumen")
+def resumen(db: Session = Depends(get_db)):
+    return problema_service.problemas_resumen(db)
+
+
 @router.get("/{problema_id}", response_model=ProblemaResponse)
 def get_problema(problema_id: int, db: Session = Depends(get_db)):
     problema = problema_service.get_problema(db, problema_id)

@@ -222,3 +222,39 @@ Relación: `incidencias.problema_id` (FK opcional a `problemas`).
 I1 (modelo) → I2 (lógica) → I3 (API) → I5 en paralelo por fase → I4 (frontend) → I6 (docs).
 Estrategia de testing: baseline verde antes de cada fase; no avanzar con rojos;
 regresión completa al cerrar cada fase (igual que en C1-C10).
+
+---
+
+## Adenda — Valor de negocio de "Problemas" y detección de recurrencia (2026-07-05)
+
+**¿Por qué existe la sección de Problemas y cómo debe interpretarla OEFA?**
+
+- **Incidente** = interrupción concreta ("el sensor SO2 de CA-UCHU-01 dio anomalía hoy").
+  Responde *¿qué está roto ahora?*. Lo repara el técnico. Es el día a día reactivo.
+- **Problema** = causa raíz de incidentes que se REPITEN ("la lámpara UV del modelo X se
+  degrada cada ~3 meses"). Responde *¿por qué se sigue rompiendo?*. Lo investiga el
+  coordinador. Es gestión analítica y preventiva.
+
+**Valor para OEFA:** pasar de apagar incendios repetidos a eliminar la causa. Un Problema
+agrupa N incidencias bajo una `causa_raiz` común y habilita decisiones que un incidente
+aislado no permite: *¿reemplazo el equipo? ¿es un lote defectuoso de lámparas (varios
+equipos del mismo modelo)? ¿ajusto la frecuencia de calibración?*. Para un laboratorio
+**ISO 17025**, el registro de Problemas (causa raíz + incidencias vinculadas + estado
+abierto→investigacion→resuelto→cerrado) es la evidencia documentada de análisis de causa
+y acción correctiva que exige la norma.
+
+**El riesgo (resuelto):** una sección de Problemas 100% manual es invisible — nadie crea
+un Problema porque nadie ve el patrón. Solución implementada: **detección de recurrencia
+que SUGIERE** (no crea; un Problema implica juicio humano sobre la causa):
+
+- **Backend:** `problema_service.detect_reincidentes(dias=90, min_correctivas=3)` agrupa
+  TODAS las correctivas por equipo en la ventana; devuelve los que cruzan el umbral,
+  EXCLUYENDO equipos que ya tienen un Problema abierto/en investigación (no re-sugiere lo
+  ya gestionado). Endpoints `GET /problemas/reincidentes` y `GET /problemas/resumen`
+  (conteo por estado). Sin cambios de schema (usa incidencias.device_id/created_at/tipo).
+- **Frontend:** widget `EquiposReincidentes` en el dashboard del coordinador — lista los
+  equipos reincidentes con "N correctivas / 90d" y un botón **"Crear problema"** que crea
+  el Problema pre-llenado (device_id + título/descr sugeridos) y VINCULA automáticamente
+  esas incidencias con un clic. Enlace al detalle con el conteo de problemas abiertos.
+- Umbral y ventana configurables por query param. Tests: ops `TestReincidentes` (5),
+  e2e "equipo reincidente sugiere crear problema".

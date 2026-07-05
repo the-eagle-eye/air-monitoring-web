@@ -52,6 +52,15 @@ test.describe('Dashboard', () => {
     await page.route(`${GW}/api/v1/calibraciones**`, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) }),
     );
+    // ITIL: reincidentes (sugerencia de problema) + resumen de problemas
+    await page.route(`${GW}/api/v1/problemas/reincidentes**`, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ dias: 90, min_correctivas: 3, items: [] }) }),
+    );
+    await page.route(`${GW}/api/v1/problemas/resumen`, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json',
+        body: JSON.stringify({ por_estado: {}, abiertos: 0, total: 0 }) }),
+    );
     await page.route(`${IOT}/api/v1/iot/readings/**`, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) }),
     );
@@ -141,5 +150,38 @@ test.describe('Dashboard', () => {
     const seccion = page.locator('div', { hasText: /Equipos que requieren atenci/i }).last();
     await expect(seccion.getByText('En seguimiento').first()).toBeVisible({ timeout: 10_000 });
     await expect(seccion.getByText(/incidencia abierta/i).first()).toBeVisible();
+  });
+
+  // ITIL Problemas visible/proactivo: un equipo reincidente sugiere abrir un
+  // problema, y "Crear problema" lo crea + vincula las incidencias.
+  test('equipo reincidente sugiere crear problema y lo crea al pulsar', async ({ page }) => {
+    await page.route(`${GW}/api/v1/problemas/reincidentes**`, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        dias: 90, min_correctivas: 3,
+        items: [{ device_id: 'T102', correctivas: 4, desde: new Date().toISOString(), incidencia_ids: [10, 11, 12, 13] }],
+      }) }),
+    );
+    let problemaCreado = false;
+    await page.route(`${GW}/api/v1/problemas`, (route) => {
+      if (route.request().method() === 'POST') {
+        problemaCreado = true;
+        return route.fulfill({ status: 201, contentType: 'application/json',
+          body: JSON.stringify({ id: 7, device_id: 'T102', titulo: 'x', estado: 'abierto', created_at: new Date().toISOString() }) });
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0 }) });
+    });
+    // vincular incidencias al problema (POST /incidencias/{id}/problema)
+    await page.route(`${GW}/api/v1/incidencias/*/problema`, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 10, problema_id: 7 }) }),
+    );
+    await page.goto('/dashboard');
+
+    // el badge "4 correctivas / 90d" es único del widget de reincidentes
+    await expect(page.getByText(/4 correctivas \/ 90d/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: /Crear problema/i })).toBeVisible();
+
+    await page.getByRole('button', { name: /Crear problema/i }).click();
+    await expect(page.getByText(/Problema #7 creado/i)).toBeVisible({ timeout: 10_000 });
+    expect(problemaCreado).toBe(true);
   });
 });

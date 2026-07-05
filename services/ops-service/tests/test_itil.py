@@ -313,3 +313,70 @@ def test_list_calibraciones_filtra_por_tecnico(db_session):
     # sin filtro: ve todas
     items_all, total_all = calibracion_service.list_calibraciones(db_session)
     assert total_all == 2
+
+
+# --- Detección de recurrencia (sugerencia de Problema) -----------------------
+
+class TestReincidentes:
+    """ITIL: equipos con correctivas recurrentes → sugiere abrir un Problema.
+    GET /api/v1/problemas/reincidentes (default >=3 correctivas en 90 días)."""
+
+    def _crear_correctivas(self, client, device_id, n):
+        for _ in range(n):
+            client.post("/api/v1/incidencias", json={
+                "device_id": device_id, "tipo": "correctiva"})
+
+    def test_equipo_con_3_correctivas_es_reincidente(self, client):
+        self._crear_correctivas(client, "T101", 3)
+        self._crear_correctivas(client, "T102", 1)  # no llega al umbral
+
+        r = client.get("/api/v1/problemas/reincidentes")
+        assert r.status_code == 200
+        items = r.json()["items"]
+        ids = {i["device_id"] for i in items}
+        assert "T101" in ids
+        assert "T102" not in ids
+        t101 = next(i for i in items if i["device_id"] == "T101")
+        assert t101["correctivas"] == 3
+        assert len(t101["incidencia_ids"]) == 3  # para vincular al crear el problema
+
+    def test_umbral_configurable(self, client):
+        self._crear_correctivas(client, "T101", 2)
+        # con umbral 2, T101 (2 correctivas) sí es reincidente
+        r = client.get("/api/v1/problemas/reincidentes?min_correctivas=2")
+        assert "T101" in {i["device_id"] for i in r.json()["items"]}
+        # con el default (3), no
+        r = client.get("/api/v1/problemas/reincidentes")
+        assert "T101" not in {i["device_id"] for i in r.json()["items"]}
+
+    def test_excluye_equipo_con_problema_abierto(self, client):
+        # T101 reincidente PERO ya tiene un problema abierto -> no se sugiere
+        self._crear_correctivas(client, "T101", 3)
+        client.post("/api/v1/problemas", json={
+            "titulo": "Falla recurrente lámpara", "device_id": "T101"})  # estado=abierto
+
+        r = client.get("/api/v1/problemas/reincidentes")
+        assert "T101" not in {i["device_id"] for i in r.json()["items"]}
+
+    def test_problema_cerrado_no_excluye(self, client):
+        # si el problema previo está CERRADO, una nueva racha sí se vuelve a sugerir
+        self._crear_correctivas(client, "T101", 3)
+        prob = client.post("/api/v1/problemas", json={
+            "titulo": "Falla previa", "device_id": "T101"}).json()
+        client.put(f"/api/v1/problemas/{prob['id']}", json={"estado": "cerrado"})
+
+        r = client.get("/api/v1/problemas/reincidentes")
+        assert "T101" in {i["device_id"] for i in r.json()["items"]}
+
+    def test_resumen_cuenta_por_estado(self, client):
+        client.post("/api/v1/problemas", json={"titulo": "A"})  # abierto
+        p2 = client.post("/api/v1/problemas", json={"titulo": "B"}).json()
+        client.put(f"/api/v1/problemas/{p2['id']}", json={"estado": "cerrado"})
+
+        r = client.get("/api/v1/problemas/resumen")
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 2
+        assert data["abiertos"] == 1  # solo A (abierto); B está cerrado
+        assert data["por_estado"]["abierto"] == 1
+        assert data["por_estado"]["cerrado"] == 1
