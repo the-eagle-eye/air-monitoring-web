@@ -96,3 +96,10 @@ están implementados y verificados; se listan para dar contexto.
 ## Calidad
 16. **Tests E2E** - Playwright para flujos criticos (parcial: hay specs e2e)
 17. **Internacionalizacion** - Soporte multiidioma
+18. **Filtrado/paginación server-side de usuarios** - `GET /api/v1/usuarios`
+    (ops-service `usuarios.py`) devuelve HOY **todos** los usuarios sin filtrar por
+    `estado`/`rol` ni paginar (`.all()`). El frontend compensa filtrando en cliente
+    (p.ej. el selector de responsables de incidencias muestra solo `rol=tecnico` +
+    `estado=activo`). No molesta con pocos usuarios, pero al crecer el catálogo conviene:
+    query params `?rol=&estado=&page=&page_size=`, y que el frontend consuma esa lista
+    ya filtrada. Descubierto al corregir la re-asignación de incidencias (fix 2026-07-05).
