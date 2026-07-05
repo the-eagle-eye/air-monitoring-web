@@ -26,7 +26,9 @@ OPS_SERVICE_URL = os.environ.get("OPS_SERVICE_URL", "http://ops-service:8003")
 
 TRANSMISSION_OK = "OK"
 SIN_TRANSMISION = "SIN_TRANSMISION"
-_OPEN_STATES = ("pendiente", "en_ejecucion")
+# ITIL: 'resuelto' cuenta como abierto (equipo en atención hasta cierre verificado).
+# Debe coincidir con _OPEN_STATES del ops-service.
+_OPEN_STATES = ("pendiente", "en_ejecucion", "resuelto")
 
 # Umbrales de gap sin lecturas (muestreo 5 min). §1.2
 # 15 min = 3 lecturas perdidas = N_CONSEC del anti-parpadeo.

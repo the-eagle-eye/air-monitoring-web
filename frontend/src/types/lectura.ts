@@ -50,6 +50,7 @@ export interface Equipo {
   parametro_medicion: string | null;
   foto_equipo: string | null;
   datalogger_id: number | null;
+  criticidad?: string;
   fecha_registro: string;
   fecha_actualizacion: string | null;
 }

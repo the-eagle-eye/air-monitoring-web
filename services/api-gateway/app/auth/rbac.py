@@ -30,6 +30,7 @@ WRITE_RESTRICTED = {
     "/api/v1/proveedores": {"administrador"},
     "/api/v1/repuestos": {"tecnico", "administrador"},
     "/api/v1/incidencias": {"coordinador", "administrador"},
+    "/api/v1/problemas": {"coordinador", "administrador"},
     "/api/v1/calibraciones": {"coordinador", "administrador"},
     "/api/v1/equipos": {"administrador"},
 }

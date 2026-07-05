@@ -117,6 +117,7 @@ function getNavForRole(rol: string) {
   const opsItems: NavItem[] = [];
   if (rol === "administrador" || rol === "coordinador") {
     opsItems.push({ label: "Incidencias", href: "/incidencias" });
+    opsItems.push({ label: "Problemas", href: "/problemas" });
     opsItems.push({ label: "Calibraciones", href: "/calibraciones" });
     opsItems.push({ label: "Reportes", href: "/reportes" });
   } else if (rol === "tecnico") {

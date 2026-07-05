@@ -26,11 +26,14 @@ export default function EquipoForm({
     modelo: initialData?.modelo ?? '',
     parametro_medicion: initialData?.parametro_medicion ?? '',
     rango_medicion: initialData?.rango_medicion ?? '',
+    criticidad: initialData?.criticidad ?? 'media',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleChange(
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
@@ -91,6 +94,26 @@ export default function EquipoForm({
             />
           </div>
         ))}
+
+        <div>
+          <label
+            htmlFor="criticidad"
+            className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Criticidad
+          </label>
+          <select
+            id="criticidad"
+            name="criticidad"
+            value={form.criticidad}
+            onChange={handleChange}
+            className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+          >
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
+          </select>
+        </div>
       </div>
 
       <div className="flex items-center gap-3 pt-2">

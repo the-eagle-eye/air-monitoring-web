@@ -9,10 +9,38 @@ import {
   submitMantenimiento,
   fetchUsuarios,
   fetchRepuestos,
+  fetchProblemas,
+  linkIncidenciaProblema,
 } from '@/lib/api/ops';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Badge from '@/components/ui/Badge';
-import type { Incidencia, Usuario, Repuesto } from '@/types/ops';
+import type { Incidencia, Usuario, Repuesto, Problema } from '@/types/ops';
+
+// ITIL: transiciones de estado válidas (coincide con el backend VALID_TRANSITIONS)
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  pendiente: ['en_ejecucion', 'cancelado'],
+  en_ejecucion: ['resuelto', 'cancelado'],
+  resuelto: ['finalizado', 'cancelado'],
+  finalizado: [],
+  cancelado: [],
+};
+
+const ESTADO_LABEL: Record<string, string> = {
+  pendiente: 'Pendiente',
+  en_ejecucion: 'En Ejecución',
+  resuelto: 'Resuelto',
+  finalizado: 'Finalizado',
+  cancelado: 'Cancelado',
+};
+
+function fmtDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
+  return d.toLocaleString('es-PE', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
 
 export default function IncidenciaDetailPage() {
   const params = useParams();
@@ -24,6 +52,7 @@ export default function IncidenciaDetailPage() {
   const [incidencia, setIncidencia] = useState<Incidencia | null>(null);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
+  const [problemas, setProblemas] = useState<Problema[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -53,6 +82,7 @@ export default function IncidenciaDetailPage() {
         setEditResponsable(inc.responsable_id ? String(inc.responsable_id) : '');
         setUsuarios(users);
         setRepuestos(reps);
+        fetchProblemas().then((r) => setProblemas(r.items)).catch(() => {});
         // Pre-populate mantenimiento fields if data exists
         if (inc.mantenimiento_correctivo) {
           setMtoDiagnostico(inc.mantenimiento_correctivo.diagnostico ?? '');
@@ -139,6 +169,17 @@ export default function IncidenciaDetailPage() {
     }
   }
 
+  async function handleLinkProblema(problemaId: number | null) {
+    try {
+      const updated = await linkIncidenciaProblema(id, problemaId);
+      setIncidencia(updated);
+      setSaveMsg({ text: problemaId ? 'Vinculada al problema' : 'Desvinculada', isError: false });
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (err) {
+      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al vincular', isError: true });
+    }
+  }
+
   function toggleRepuesto(repId: number) {
     setSelectedRepuestoIds((prev) =>
       prev.includes(repId) ? prev.filter((r) => r !== repId) : [...prev, repId],
@@ -208,6 +249,14 @@ export default function IncidenciaDetailPage() {
               Editar
             </Link>
           )}
+          {incidencia.problema_id && (
+            <Link
+              href={`/problemas/${incidencia.problema_id}`}
+              className="rounded-md border border-purple-300 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300"
+            >
+              Ver Problema #{incidencia.problema_id}
+            </Link>
+          )}
           <Link
             href={`/equipos/${incidencia.device_id}`}
             className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
@@ -262,10 +311,13 @@ export default function IncidenciaDetailPage() {
                   onChange={(e) => setEditEstado(e.target.value)}
                   className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                 >
-                  <option value="pendiente">Pendiente</option>
-                  <option value="en_ejecucion">En Ejecucion</option>
-                  <option value="finalizado">Finalizado</option>
-                  <option value="cancelado">Cancelado</option>
+                  {/* solo el estado actual + las transiciones válidas (ITIL) */}
+                  <option value={incidencia.estado}>
+                    {ESTADO_LABEL[incidencia.estado] ?? incidencia.estado}
+                  </option>
+                  {(VALID_TRANSITIONS[incidencia.estado] ?? []).map((s) => (
+                    <option key={s} value={s}>{ESTADO_LABEL[s] ?? s}</option>
+                  ))}
                 </select>
               ) : (
                 <StatusBadge status={incidencia.estado} />
@@ -297,6 +349,25 @@ export default function IncidenciaDetailPage() {
               )}
             </dd>
           </div>
+          {/* ITIL: impacto × urgencia = prioridad (derivada) + categoría */}
+          <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">Impacto</dt>
+            <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
+              {(incidencia.impacto ?? 'media').replace(/^\w/, (c) => c.toUpperCase())}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">Urgencia</dt>
+            <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
+              {(incidencia.urgencia ?? 'media').replace(/^\w/, (c) => c.toUpperCase())}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">Categoría</dt>
+            <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
+              {(incidencia.categoria ?? 'otro').replace(/^\w/, (c) => c.toUpperCase())}
+            </dd>
+          </div>
           <div>
             <dt className="text-xs font-medium uppercase text-zinc-500">Creada</dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
@@ -305,11 +376,58 @@ export default function IncidenciaDetailPage() {
           </div>
         </div>
 
-        {incidencia.descripcion && (
+        {/* ITIL: timeline SLA */}
+        <div className="mb-4 grid grid-cols-3 gap-4 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
           <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">Asignación</dt>
+            <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+              {fmtDate(incidencia.fecha_asignacion)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">Resolución</dt>
+            <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+              {fmtDate(incidencia.fecha_resolucion)}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-xs font-medium uppercase text-zinc-500">Cierre</dt>
+            <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
+              {fmtDate(incidencia.fecha_cierre)}
+            </dd>
+          </div>
+        </div>
+
+        {incidencia.descripcion && (
+          <div className="mb-4">
             <dt className="text-xs font-medium uppercase text-zinc-500">Descripcion</dt>
             <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
               {incidencia.descripcion}
+            </dd>
+          </div>
+        )}
+
+        {/* ITIL: vincular a un Problema (causa raíz) — en modo edición */}
+        {isEditMode && (
+          <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
+            <dt className="text-xs font-medium uppercase text-zinc-500">
+              Problema (causa raíz)
+            </dt>
+            <dd className="mt-1">
+              <select
+                value={incidencia.problema_id ?? ''}
+                onChange={(e) =>
+                  handleLinkProblema(e.target.value ? Number(e.target.value) : null)
+                }
+                className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+              >
+                <option value="">Sin problema vinculado</option>
+                {problemas.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    #{p.id} — {p.titulo}
+                  </option>
+                ))}
+              </select>
             </dd>
           </div>
         )}

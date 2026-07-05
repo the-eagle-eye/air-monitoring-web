@@ -16,6 +16,7 @@ _STATIC_SERVICE_MAP = {
     "/api/v1/iot": settings.IOT_SERVICE_URL,
     "/api/v1/equipos": settings.OPS_SERVICE_URL,
     "/api/v1/incidencias": settings.OPS_SERVICE_URL,
+    "/api/v1/problemas": settings.OPS_SERVICE_URL,
     "/api/v1/calibraciones": settings.OPS_SERVICE_URL,
     "/api/v1/dashboard": settings.OPS_SERVICE_URL,
     "/api/v1/usuarios": settings.OPS_SERVICE_URL,

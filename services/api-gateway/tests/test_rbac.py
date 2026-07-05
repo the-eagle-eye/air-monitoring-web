@@ -84,6 +84,19 @@ def test_coordinador_cannot_write_proveedores():
     assert check_write_permission("/api/v1/proveedores", "POST", "coordinador") is False
 
 
+# -- Problemas ITIL: coordinador + admin (igual que incidencias) --
+def test_admin_can_write_problemas():
+    assert check_write_permission("/api/v1/problemas", "POST", "administrador") is True
+
+
+def test_coordinador_can_write_problemas():
+    assert check_write_permission("/api/v1/problemas", "POST", "coordinador") is True
+
+
+def test_tecnico_cannot_write_problemas():
+    assert check_write_permission("/api/v1/problemas", "POST", "tecnico") is False
+
+
 # -- Repuestos: tecnico + admin --
 def test_admin_can_write_repuestos():
     assert check_write_permission("/api/v1/repuestos", "POST", "administrador") is True

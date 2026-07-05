@@ -46,6 +46,12 @@ const PRIORIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
   baja: 'success',
 };
 
+const CRITICIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
+  alta: 'danger',
+  media: 'warning',
+  baja: 'success',
+};
+
 // --------------- mini charts ---------------
 
 const MiniSensorChart = dynamic(
@@ -92,6 +98,8 @@ function EquipoDetail({ equipo }: { equipo: Equipo }) {
     { label: 'Fecha Registro', value: new Date(equipo.fecha_registro).toLocaleDateString() },
   ];
 
+  const criticidad = equipo.criticidad ?? 'media';
+
   return (
     <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
       {fields.map((f) => (
@@ -104,6 +112,17 @@ function EquipoDetail({ equipo }: { equipo: Equipo }) {
           </dd>
         </div>
       ))}
+      <div>
+        <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+          Criticidad
+        </dt>
+        <dd className="mt-0.5">
+          <Badge
+            label={criticidad.charAt(0).toUpperCase() + criticidad.slice(1)}
+            variant={CRITICIDAD_VARIANT[criticidad] ?? 'default'}
+          />
+        </dd>
+      </div>
     </div>
   );
 }

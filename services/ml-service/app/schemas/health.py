@@ -110,3 +110,10 @@ class ThetaRecalResponse(BaseModel):
 
 class RetrainCheckResponse(BaseModel):
     results: list[dict]
+
+
+class AutocloseResponse(BaseModel):
+    finalizadas: list[int]
+    canceladas: list[int]
+    pendientes: list[int]
+    ran_at: str

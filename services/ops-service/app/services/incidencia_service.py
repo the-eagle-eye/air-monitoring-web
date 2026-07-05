@@ -11,15 +11,41 @@ from app.models.incidencia import Incidencia
 from app.models.calibracion import Calibracion
 from app.models.usuario import Usuario
 from app.schemas.incidencia import IncidenciaCreate, IncidenciaUpdate
-from app.services import email_service
+from app.services import email_service, priority_service
+
+# ITIL: ciclo de vida — transiciones permitidas por estado (I2.2).
+VALID_TRANSITIONS: dict[str, tuple[str, ...]] = {
+    "pendiente": ("en_ejecucion", "cancelado"),
+    "en_ejecucion": ("resuelto", "cancelado"),
+    "resuelto": ("finalizado", "cancelado"),  # auto o manual
+    "finalizado": (),   # terminal
+    "cancelado": (),    # terminal
+}
 
 
-def create_incidencia(db: Session, data: IncidenciaCreate) -> Incidencia:
+def _equipo_criticidad(iot_service_url: str, device_id: str) -> str:
+    """Criticidad del equipo (= impacto ITIL). Default 'media' si no se puede leer."""
+    data = _fetch_equipo_data(iot_service_url, device_id)
+    return data.get("criticidad") or "media"
+
+
+def create_incidencia(db: Session, data: IncidenciaCreate,
+                      iot_service_url: str = "") -> Incidencia:
+    # impacto = el enviado, o la criticidad del equipo; prioridad derivada (I2.4)
+    impacto = data.impacto
+    if impacto is None:
+        impacto = _equipo_criticidad(iot_service_url, data.device_id) \
+            if iot_service_url else "media"
+    prioridad = data.prioridad or priority_service.derive_priority(
+        impacto, data.urgencia)
     incidencia = Incidencia(
         device_id=data.device_id,
         tipo=data.tipo,
         descripcion=data.descripcion,
-        prioridad=data.prioridad,
+        prioridad=prioridad,
+        impacto=impacto,
+        urgencia=data.urgencia,
+        categoria=data.categoria,
         origen=data.origen,
         responsable_id=data.responsable_id,
     )
@@ -71,6 +97,20 @@ def list_incidencias(
     return items, total
 
 
+class InvalidTransition(Exception):
+    """Transición de estado no permitida por el ciclo de vida ITIL (I2.2)."""
+
+
+def _seal_sla_timestamps(incidencia: Incidencia, new_state: str, now: datetime):
+    """Sella los timestamps SLA al entrar a un estado (I2.3), sin sobreescribir."""
+    if new_state == "en_ejecucion" and incidencia.fecha_asignacion is None:
+        incidencia.fecha_asignacion = now
+    elif new_state == "resuelto" and incidencia.fecha_resolucion is None:
+        incidencia.fecha_resolucion = now
+    elif new_state in ("finalizado", "cancelado") and incidencia.fecha_cierre is None:
+        incidencia.fecha_cierre = now
+
+
 def update_incidencia(
     db: Session, incidencia_id: int, data: IncidenciaUpdate
 ) -> Incidencia | None:
@@ -81,9 +121,27 @@ def update_incidencia(
         return None
 
     update_fields = data.model_dump(exclude_unset=True)
+    now = datetime.now(timezone.utc)
+
+    # ITIL I2.2: validar transición de estado (si se cambia y es distinto)
+    new_state = update_fields.get("estado")
+    if new_state and new_state != incidencia.estado:
+        allowed = VALID_TRANSITIONS.get(incidencia.estado, ())
+        if new_state not in allowed:
+            raise InvalidTransition(
+                f"Transición inválida: {incidencia.estado} -> {new_state}"
+            )
+        _seal_sla_timestamps(incidencia, new_state, now)
+
     for field, value in update_fields.items():
         setattr(incidencia, field, value)
-    incidencia.updated_at = datetime.now(timezone.utc)
+
+    # ITIL I2.4: si cambió impacto o urgencia, re-derivar prioridad
+    if "impacto" in update_fields or "urgencia" in update_fields:
+        incidencia.prioridad = priority_service.derive_priority(
+            incidencia.impacto, incidencia.urgencia)
+
+    incidencia.updated_at = now
 
     db.commit()
     db.refresh(incidencia)
@@ -239,7 +297,9 @@ def create_alert_triggered_incidencia(
 # --- Regla de consolidacion de alertas del monitor de salud ---
 # docs/regla-consolidacion-alertas.md
 MONITOR_ORIGEN = "monitor_salud"
-_OPEN_STATES = ("pendiente", "en_ejecucion")
+# ITIL I2.5: 'resuelto' cuenta como ABIERTO (dedup no crea duplicados hasta el
+# cierre verificado/finalizado). Debe coincidir con el watchdog del ml-service.
+_OPEN_STATES = ("pendiente", "en_ejecucion", "resuelto")
 # severidad del ensemble -> prioridad del incidente
 _SEVERITY_PRIORITY = {
     "OBSERVADO": "baja",
@@ -264,9 +324,13 @@ def create_or_escalate_monitor_incidencia(
 
     Retorna (incidencia, accion) donde accion in {created, escalated, noop}.
     """
-    prioridad = _SEVERITY_PRIORITY.get(severidad)
-    if prioridad is None:
+    urgencia = priority_service.urgency_from_severity(severidad)
+    if severidad not in _SEVERITY_PRIORITY:
         return None, "noop"
+    # ITIL: prioridad = matriz(impacto=criticidad del equipo × urgencia=severidad)
+    impacto = _equipo_criticidad(iot_service_url, device_id) \
+        if iot_service_url else "media"
+    prioridad = priority_service.derive_priority(impacto, urgencia)
 
     abierta = (
         db.query(Incidencia)
@@ -282,9 +346,11 @@ def create_or_escalate_monitor_incidencia(
 
     if abierta is not None:
         # escalada: solo subir prioridad (CA-05), nunca bajar
-        if _PRIORITY_RANK[prioridad] > _PRIORITY_RANK[abierta.prioridad]:
+        if (priority_service.priority_rank(prioridad)
+                > priority_service.priority_rank(abierta.prioridad)):
             prev = abierta.prioridad
             abierta.prioridad = prioridad
+            abierta.urgencia = urgencia
             abierta.updated_at = datetime.now(timezone.utc)
             db.commit()
             db.refresh(abierta)
@@ -307,6 +373,9 @@ def create_or_escalate_monitor_incidencia(
             f"para equipo {device_id}"
         ),
         prioridad=prioridad,
+        impacto=impacto,
+        urgencia=urgencia,
+        categoria="sensor",  # el monitor detecta anomalías del sensor
         origen=MONITOR_ORIGEN,
         responsable_id=coordinador.id if coordinador else None,
     )

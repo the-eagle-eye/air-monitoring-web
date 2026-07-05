@@ -9,6 +9,15 @@ from app.schemas.calibracion import CalibracionCreate
 from app.schemas.mantenimiento import MantenimientoCreate
 
 
+def _finalizar(db, inc_id):
+    """ITIL: transiciona una incidencia por el ciclo válido hasta finalizado
+    (pendiente -> en_ejecucion -> resuelto -> finalizado)."""
+    for estado in ("en_ejecucion", "resuelto", "finalizado"):
+        result = incidencia_service.update_incidencia(
+            db, inc_id, IncidenciaUpdate(estado=estado))
+    return result
+
+
 class TestIncidenciaService:
     def test_auto_create_calibracion_on_finalize(self, db_session):
         """When a correctiva incidencia is finalized, a calibracion incidencia is auto-created."""
@@ -20,11 +29,7 @@ class TestIncidenciaService:
         )
         assert inc.estado == "pendiente"
 
-        updated = incidencia_service.update_incidencia(
-            db_session,
-            inc.id,
-            IncidenciaUpdate(estado="finalizado"),
-        )
+        updated = _finalizar(db_session, inc.id)
         assert updated.estado == "finalizado"
 
         # Verify calibracion incidencia was auto-created
@@ -56,11 +61,7 @@ class TestIncidenciaService:
                 device_id="T101", tipo="calibracion", prioridad="media"
             ),
         )
-        incidencia_service.update_incidencia(
-            db_session,
-            inc.id,
-            IncidenciaUpdate(estado="finalizado"),
-        )
+        _finalizar(db_session, inc.id)
 
         count = (
             db_session.query(Incidencia)
@@ -394,9 +395,7 @@ class TestDeactivateAlertsOnFinalize:
             db_session,
             IncidenciaCreate(device_id="T101", tipo="correctiva", prioridad="alta"),
         )
-        incidencia_service.update_incidencia(
-            db_session, inc.id, IncidenciaUpdate(estado="finalizado"),
-        )
+        _finalizar(db_session, inc.id)
 
         mock_deactivate.assert_called_once()
         assert mock_deactivate.call_args[0][0] == "T101"
@@ -415,9 +414,7 @@ class TestDeactivateAlertsOnFinalize:
             db_session,
             IncidenciaCreate(device_id="T101", tipo="correctiva", prioridad="alta"),
         )
-        result = incidencia_service.update_incidencia(
-            db_session, inc.id, IncidenciaUpdate(estado="finalizado"),
-        )
+        result = _finalizar(db_session, inc.id)
 
         assert result.estado == "finalizado"
 
@@ -436,9 +433,7 @@ class TestAutoCalibrationCoordinador:
             db_session,
             IncidenciaCreate(device_id="T101", tipo="correctiva", prioridad="alta"),
         )
-        incidencia_service.update_incidencia(
-            db_session, inc.id, IncidenciaUpdate(estado="finalizado"),
-        )
+        _finalizar(db_session, inc.id)
 
         cal_inc = (
             db_session.query(Incidencia)
@@ -468,9 +463,7 @@ class TestAutoCalibrationCoordinador:
             db_session,
             IncidenciaCreate(device_id="T101", tipo="correctiva", prioridad="alta"),
         )
-        incidencia_service.update_incidencia(
-            db_session, inc.id, IncidenciaUpdate(estado="finalizado"),
-        )
+        _finalizar(db_session, inc.id)
 
         mock_email.assert_called_once()
         call_args = mock_email.call_args

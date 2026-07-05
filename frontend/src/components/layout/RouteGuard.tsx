@@ -7,12 +7,12 @@ import { useAuth } from '@/lib/auth';
 // Routes accessible by role
 const ROLE_ROUTES: Record<string, string[]> = {
   administrador: [
-    '/', '/dashboard', '/equipos', '/incidencias', '/calibraciones',
+    '/', '/dashboard', '/equipos', '/incidencias', '/problemas', '/calibraciones',
     '/lecturas',
     '/repuestos', '/proveedores', '/usuarios', '/reportes',
   ],
   coordinador: [
-    '/', '/dashboard', '/equipos', '/incidencias', '/calibraciones',
+    '/', '/dashboard', '/equipos', '/incidencias', '/problemas', '/calibraciones',
     '/lecturas', '/reportes',
   ],
   tecnico: [

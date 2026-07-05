@@ -37,4 +37,10 @@ class Equipo(Base):
     foto_equipo: Mapped[str | None] = mapped_column(String, nullable=True)
     datalogger_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # ITIL v4: criticidad del equipo = IMPACTO para la matriz impacto×urgencia.
+    # alta = estación crítica (p.ej. zona poblada), baja = secundaria. Default media.
+    criticidad: Mapped[str] = mapped_column(
+        String, nullable=False, default="media", server_default="media"
+    )
+
     lecturas = relationship("LecturaIoT", back_populates="equipo")

@@ -17,6 +17,7 @@ class EquipoBase(BaseModel):
     parametro_medicion: str | None = None
     foto_equipo: str | None = None
     datalogger_id: int | None = None
+    criticidad: str = "media"  # ITIL v4: impacto (alta|media|baja)
 
 
 class EquipoCreate(EquipoBase):
@@ -37,6 +38,7 @@ class EquipoUpdate(BaseModel):
     parametro_medicion: str | None = None
     foto_equipo: str | None = None
     datalogger_id: int | None = None
+    criticidad: str | None = None
 
 
 class EquipoResponse(EquipoBase):

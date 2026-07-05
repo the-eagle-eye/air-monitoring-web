@@ -6,6 +6,7 @@ os.environ.setdefault("WATCHDOG_ENABLED", "0")
 os.environ.setdefault("METRICS_ENABLED", "0")
 os.environ.setdefault("THETA_RECAL_ENABLED", "0")
 os.environ.setdefault("RETRAIN_CHECK_ENABLED", "0")
+os.environ.setdefault("AUTOCLOSE_ENABLED", "0")
 
 import pytest
 from sqlalchemy import create_engine, event

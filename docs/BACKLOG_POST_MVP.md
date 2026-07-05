@@ -45,10 +45,11 @@ están implementados y verificados; se listan para dar contexto.
 
 | # | Item | Estado | Notas |
 |---|---|---|---|
-| I1 | **Modelo de Incidente ITIL** | ❌ Pendiente | Categoría, impacto×urgencia→prioridad, sub-estado `resuelto`, timestamps SLA. |
-| I2 | **Gestión de Problemas** | ❌ Pendiente | Tabla `problemas` + relación con incidentes recurrentes (causa raíz). |
-| I3 | **Ciclo de vida ITIL** | ❌ Pendiente | Nuevo→Asignado→En progreso→Resuelto→Cerrado con transiciones válidas. |
-| I4 | **SLA y tiempos** | ❌ Pendiente | Registro y objetivos de tiempo (registro→asignación→resolución→cierre). |
+| I1 | **Modelo de Incidente ITIL** | ✅ HECHO backend (2026-07-05) | Categoría, impacto×urgencia→prioridad (matriz 3×3), sub-estado `resuelto`, timestamps SLA. `equipos.criticidad`=impacto (migr iot 005), campos ITIL en incidencias (migr ops_007). |
+| I2 | **Gestión de Problemas** | ✅ HECHO backend | Tabla `problemas` (migr ops_006) + `incidencias.problema_id`; CRUD + vincular; endpoints via gateway. |
+| I3 | **Ciclo de vida ITIL** | ✅ HECHO backend | pendiente→en_ejecucion→resuelto→finalizado/cancelado con transiciones validadas (400 si inválida). **Auto-cierre por el ensemble**: resuelto + N SANO → finalizado (calibración); +48h sin datos → cancelado. `resuelto`=abierto en dedup+watchdog. |
+| I4 | **SLA y tiempos** | ✅ HECHO backend | `fecha_asignacion/resolucion/cierre` sellados en cada transición. |
+| I5 | **Frontend ITIL** | ✅ HECHO (2026-07-05) | Detalle de incidencia con impacto/urgencia/categoría + timeline SLA + dropdown de estado con solo transiciones válidas + vincular a Problema + botón "Ver Problema". Vista de Problemas (lista + detalle con incidentes vinculados). Criticidad editable en detalle de equipo. Nav "Problemas" + RouteGuard. typecheck 0, e2e 40 verde, verificado en navegador. |
 
 ---
 

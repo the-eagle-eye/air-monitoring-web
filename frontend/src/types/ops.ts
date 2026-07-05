@@ -5,10 +5,36 @@ export interface Incidencia {
   descripcion: string | null;
   estado: string;
   prioridad: string;
+  // ITIL v4
+  impacto?: string;
+  urgencia?: string;
+  categoria?: string;
+  origen?: string;
+  problema_id?: number | null;
   responsable_id: number | null;
   created_at: string;
   updated_at: string | null;
+  fecha_asignacion?: string | null;
+  fecha_resolucion?: string | null;
+  fecha_cierre?: string | null;
   mantenimiento_correctivo?: Mantenimiento | null;
+}
+
+// ITIL v4 — Gestión de Problemas
+export interface Problema {
+  id: number;
+  device_id: string | null;
+  titulo: string;
+  descripcion: string | null;
+  estado: string;
+  causa_raiz: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ProblemaListResponse {
+  items: Problema[];
+  total: number;
 }
 
 export interface IncidenciaListResponse {

@@ -3,6 +3,8 @@ import { SERVICE_URLS } from '../api';
 import type {
   Incidencia,
   IncidenciaListResponse,
+  Problema,
+  ProblemaListResponse,
   CalibracionOps,
   CalibracionListResponse,
   Mantenimiento,
@@ -49,6 +51,9 @@ export async function createIncidencia(data: {
   tipo: string;
   descripcion?: string;
   prioridad?: string;
+  impacto?: string;
+  urgencia?: string;
+  categoria?: string;
   responsable_id?: number;
 }): Promise<Incidencia> {
   return apiFetch<Incidencia>('/api/v1/incidencias', {
@@ -64,12 +69,28 @@ export async function updateIncidencia(
     estado?: string;
     responsable_id?: number;
     descripcion?: string;
+    impacto?: string;
+    urgencia?: string;
+    categoria?: string;
+    problema_id?: number | null;
   },
 ): Promise<Incidencia> {
   return apiFetch<Incidencia>(`/api/v1/incidencias/${id}`, {
     service: 'gateway',
     method: 'PUT',
     body: JSON.stringify(data),
+  });
+}
+
+// Vincular/desvincular incidencia a un problema (ITIL)
+export async function linkIncidenciaProblema(
+  incidenciaId: number,
+  problemaId: number | null,
+): Promise<Incidencia> {
+  return apiFetch<Incidencia>(`/api/v1/incidencias/${incidenciaId}/problema`, {
+    service: 'gateway',
+    method: 'POST',
+    body: JSON.stringify({ problema_id: problemaId }),
   });
 }
 
@@ -292,4 +313,54 @@ export async function downloadReporte(
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
+}
+
+// --- Problemas (ITIL v4 gestión de problemas) ---
+
+export async function fetchProblemas(params?: {
+  estado?: string;
+  device_id?: string;
+}): Promise<ProblemaListResponse> {
+  const searchParams = new URLSearchParams();
+  if (params?.estado) searchParams.set('estado', params.estado);
+  if (params?.device_id) searchParams.set('device_id', params.device_id);
+  const qs = searchParams.toString();
+  return apiFetch<ProblemaListResponse>(
+    `/api/v1/problemas${qs ? `?${qs}` : ''}`,
+    { service: 'gateway' },
+  );
+}
+
+export async function fetchProblema(id: number): Promise<Problema> {
+  return apiFetch<Problema>(`/api/v1/problemas/${id}`, { service: 'gateway' });
+}
+
+export async function fetchProblemaIncidencias(id: number): Promise<Incidencia[]> {
+  return apiFetch<Incidencia[]>(`/api/v1/problemas/${id}/incidencias`, {
+    service: 'gateway',
+  });
+}
+
+export async function createProblema(data: {
+  titulo: string;
+  device_id?: string;
+  descripcion?: string;
+  causa_raiz?: string;
+}): Promise<Problema> {
+  return apiFetch<Problema>('/api/v1/problemas', {
+    service: 'gateway',
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function updateProblema(
+  id: number,
+  data: { titulo?: string; descripcion?: string; estado?: string; causa_raiz?: string },
+): Promise<Problema> {
+  return apiFetch<Problema>(`/api/v1/problemas/${id}`, {
+    service: 'gateway',
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }

@@ -14,6 +14,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.database import SessionLocal
 from app.services import (
+    autoclose_service,
     metrics_service,
     retrain_service,
     theta_service,
@@ -30,6 +31,9 @@ THETA_RECAL_ENABLED = os.environ.get("THETA_RECAL_ENABLED", "1") == "1"
 # Reentrenamiento por degradación: opt-in (costoso). Chequea a diario y solo
 # entrena si should_retrain Y RETRAIN_ENABLED.
 RETRAIN_CHECK_ENABLED = os.environ.get("RETRAIN_CHECK_ENABLED", "0") == "1"
+# Auto-cierre ITIL de incidencias en 'resuelto' (I2.7/I2.8).
+AUTOCLOSE_ENABLED = os.environ.get("AUTOCLOSE_ENABLED", "1") == "1"
+AUTOCLOSE_INTERVAL_MIN = int(os.environ.get("AUTOCLOSE_INTERVAL_MIN", "15"))
 
 _scheduler: BackgroundScheduler | None = None
 
@@ -79,11 +83,22 @@ def _retrain_check_job() -> None:
         db.close()
 
 
+def _autoclose_job() -> None:
+    """Auto-cierre ITIL de incidencias en 'resuelto' (I2.7/I2.8)."""
+    db = SessionLocal()
+    try:
+        autoclose_service.run_autoclose(db)
+    except Exception:
+        logger.exception("Error en el auto-cierre programado")
+    finally:
+        db.close()
+
+
 def start_scheduler() -> BackgroundScheduler | None:
     """Arranca el scheduler con los jobs habilitados. Idempotente."""
     global _scheduler
     if not (WATCHDOG_ENABLED or METRICS_ENABLED or THETA_RECAL_ENABLED
-            or RETRAIN_CHECK_ENABLED):
+            or RETRAIN_CHECK_ENABLED or AUTOCLOSE_ENABLED):
         logger.info("Scheduler deshabilitado (todos los jobs off)")
         return None
     if _scheduler is not None:
@@ -125,6 +140,14 @@ def start_scheduler() -> BackgroundScheduler | None:
             max_instances=1, coalesce=True,
         )
         logger.info("Chequeo de degradación/reentrenamiento programado diario (04:00 UTC)")
+
+    if AUTOCLOSE_ENABLED:
+        _scheduler.add_job(
+            _autoclose_job, trigger="interval", minutes=AUTOCLOSE_INTERVAL_MIN,
+            id="itil_autoclose", replace_existing=True,
+            max_instances=1, coalesce=True,
+        )
+        logger.info("Auto-cierre ITIL programado cada %d min", AUTOCLOSE_INTERVAL_MIN)
 
     _scheduler.start()
     return _scheduler

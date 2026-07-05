@@ -19,7 +19,7 @@ from app.schemas.mantenimiento import (
     AdjuntoResponse,
 )
 from app.models.archivo_adjunto import ArchivoAdjunto
-from app.services import incidencia_service, mantenimiento_service
+from app.services import incidencia_service, mantenimiento_service, problema_service
 
 
 class AlertTriggerRequest(BaseModel):
@@ -30,6 +30,10 @@ class AlertTriggerRequest(BaseModel):
 class MonitorAlertRequest(BaseModel):
     device_id: str
     severidad: str  # OBSERVADO | EN_RIESGO | CRITICO
+
+
+class LinkProblemaRequest(BaseModel):
+    problema_id: int | None = None  # None = desvincular
 
 router = APIRouter()
 
@@ -68,7 +72,8 @@ def list_incidencias(
 
 @router.post("", response_model=IncidenciaResponse, status_code=201)
 def create_incidencia(data: IncidenciaCreate, db: Session = Depends(get_db)):
-    incidencia = incidencia_service.create_incidencia(db, data)
+    incidencia = incidencia_service.create_incidencia(
+        db, data, settings.IOT_SERVICE_URL)
     return IncidenciaResponse.model_validate(incidencia)
 
 
@@ -127,11 +132,26 @@ def update_incidencia(
     data: IncidenciaUpdate,
     db: Session = Depends(get_db),
 ):
-    incidencia = incidencia_service.update_incidencia(db, incidencia_id, data)
+    try:
+        incidencia = incidencia_service.update_incidencia(db, incidencia_id, data)
+    except incidencia_service.InvalidTransition as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     if not incidencia:
         raise HTTPException(
             status_code=404, detail="Incidencia no encontrada"
         )
+    return IncidenciaResponse.model_validate(incidencia)
+
+
+@router.post("/{incidencia_id}/problema", response_model=IncidenciaResponse)
+def link_problema(incidencia_id: int, data: LinkProblemaRequest,
+                  db: Session = Depends(get_db)):
+    """ITIL: vincula (o desvincula con problema_id=null) la incidencia a un
+    Problema (causa raíz)."""
+    incidencia = problema_service.link_incidencia(db, incidencia_id, data.problema_id)
+    if not incidencia:
+        raise HTTPException(
+            status_code=404, detail="Incidencia o problema no encontrado")
     return IncidenciaResponse.model_validate(incidencia)
 
 

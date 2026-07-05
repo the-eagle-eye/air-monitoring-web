@@ -39,6 +39,9 @@ async function setupMocks(page: Page, incidencia = MOCK_INCIDENCIA) {
   await page.route(`${GW}/api/v1/repuestos`, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_REPUESTOS) }),
   );
+  await page.route(`${GW}/api/v1/problemas**`, (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0 }) }),
+  );
   await page.route(`${GW}/api/v1/incidencias/1/mantenimiento`, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }),
   );
@@ -88,7 +91,9 @@ test.describe('Incidencia detail page', () => {
     await expect(page.locator('select').first()).toBeVisible();
   });
 
-  test('edit mode shows estado dropdown with all options', async ({ page }) => {
+  test('edit mode estado dropdown shows only valid ITIL transitions', async ({ page }) => {
+    // ITIL: desde 'pendiente' solo se permite en_ejecucion o cancelado
+    // (NO finalizado directo). El mock crea la incidencia en 'pendiente'.
     await injectFakeAuth(page, 'administrador');
     await setupMocks(page);
     await gotoIncidencia(page, '/incidencias/1?mode=edit');
@@ -96,10 +101,12 @@ test.describe('Incidencia detail page', () => {
     const estadoSelect = page.locator('select').first();
     await estadoSelect.waitFor({ timeout: 15_000 });
 
+    // estado actual + transiciones válidas
     await expect(estadoSelect.locator('option[value="pendiente"]')).toBeAttached();
     await expect(estadoSelect.locator('option[value="en_ejecucion"]')).toBeAttached();
-    await expect(estadoSelect.locator('option[value="finalizado"]')).toBeAttached();
     await expect(estadoSelect.locator('option[value="cancelado"]')).toBeAttached();
+    // finalizado NO es transición válida desde pendiente
+    await expect(estadoSelect.locator('option[value="finalizado"]')).toHaveCount(0);
   });
 
   test('edit mode shows responsable dropdown with usuarios', async ({ page }) => {
@@ -107,7 +114,8 @@ test.describe('Incidencia detail page', () => {
     await setupMocks(page);
     await gotoIncidencia(page, '/incidencias/1?mode=edit');
 
-    await expect(page.locator('select')).toHaveCount(2, { timeout: 15_000 });
+    // en modo edición hay 3 selects: estado, responsable, y vincular-problema (ITIL)
+    await expect(page.locator('select')).toHaveCount(3, { timeout: 15_000 });
     const responsableSelect = page.locator('select').nth(1);
     await expect(responsableSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
   });

@@ -7,6 +7,7 @@ from app.schemas.health import (
     HealthEvaluateRequest,
     HealthEvaluateResponse,
     HealthReadingsResponse,
+    AutocloseResponse,
     MetricsRunResponse,
     ModelMetricsResponse,
     NoTransmissionResponse,
@@ -16,6 +17,7 @@ from app.schemas.health import (
 )
 from app.services.health_service import evaluate, get_device_state, get_readings
 from app.services import (
+    autoclose_service,
     metrics_service,
     retrain_service,
     theta_service,
@@ -121,3 +123,10 @@ def should_retrain_check(db: Session = Depends(get_db)):
     """Diagnóstico C5: evalúa criterios de degradación por estación (spec §2.3)
     sin disparar reentrenamiento. Devuelve qué estaciones lo necesitarían."""
     return {"results": retrain_service.evaluate_all(db)}
+
+
+@router.post("/run-autoclose", response_model=AutocloseResponse)
+def run_autoclose_now(db: Session = Depends(get_db)):
+    """Auto-cierre ITIL on-demand (I2.7): cierra incidencias en 'resuelto' con
+    lecturas SANO confirmadas o timeout. El scheduler ya lo corre cada 15 min."""
+    return autoclose_service.run_autoclose(db)
