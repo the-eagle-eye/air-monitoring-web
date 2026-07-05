@@ -1,5 +1,23 @@
 # Guia Completa de Despliegue - Air Monitoring Project
 
+> ## ⚠️ DOCUMENTO ARCHIVADO — arquitectura Fargate (avanzada) y DESACTUALIZADA
+>
+> Este documento describe la **alternativa ECS Fargate + ALB + Cloud Map + ECR + Vercel**
+> (contenedores gestionados, producción a escala). **NO es la arquitectura del entregable
+> de tesis.** Para la migración recomendada (EC2 única + docker-compose + RDS + Terraform,
+> simple y free-tier) usa los documentos en **`docs/aws/`**:
+> - `docs/aws/spec-migracion-aws.md` — arquitectura y decisiones
+> - `docs/aws/plan-implementacion-aws.md` — fases de implementación
+> - `docs/aws/guia-aws-paso-a-paso.md` — guía comando por comando (nivel básico)
+>
+> **Además, este doc está desactualizado tras el retiro del Random Forest (C2, 2026-07-05):**
+> menciona endpoints `/predictions` y `/alerts`, tablas `predicciones`/`alertas`, el
+> directorio `ml_artifacts/` y "3 tablas alembic" — todo eso fue eliminado. El modelo
+> vigente es el ensemble no supervisado (AE+IF, `/health-monitor`), los artefactos viven en
+> `ml_artifacts_ensemble_v1/`, y hay 4 tablas de versión alembic
+> (iot/ml/ml_isolation/ops). Si algún día se retoma Fargate, corregir estas referencias
+> primero. Se conserva como referencia del **escalado futuro** (ver `spec-migracion-aws.md` §8).
+
 ## Tabla de Contenidos
 
 1. [Resumen de Arquitectura](#1-resumen-de-arquitectura)
