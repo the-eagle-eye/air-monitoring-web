@@ -109,6 +109,27 @@ test.describe('Incidencia detail page (flujo ITIL por rol)', () => {
     await expect(tecSelect.locator('option', { hasText: 'Baja Retirado' })).toHaveCount(0);
   });
 
+  // BUG: incidencia asignada a la COORDINADORA (no un técnico, id fuera de la lista)
+  // el selector NO debe mostrar falsamente al primer técnico como seleccionado; debe
+  // quedar en "Seleccionar técnico" y el botón Re-asignar deshabilitado hasta elegir.
+  test('reassign selector no preselecciona un responsable que no es técnico', async ({ page }) => {
+    await injectFakeAuth(page, 'administrador');
+    // responsable_id: 99 = coordinador ajeno a la lista de técnicos (como Maria Huaman)
+    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'en_ejecucion', responsable_id: 99 });
+    await gotoIncidencia(page);
+
+    const tecSelect = page.locator('select').first();
+    await expect(tecSelect).toBeVisible({ timeout: 15_000 });
+    // el value del select debe ser vacío (placeholder), NO el primer técnico
+    await expect(tecSelect).toHaveValue('');
+    // el botón Re-asignar está deshabilitado hasta que se elija un técnico real
+    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeDisabled();
+
+    // al elegir un técnico real, se habilita
+    await tecSelect.selectOption({ label: 'Juan Perez' });
+    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeEnabled();
+  });
+
   // Coordinador: incidencia resuelta -> puede VERIFICAR Y CERRAR
   test('coordinador sees Verificar y cerrar on resuelto', async ({ page }) => {
     await injectFakeAuth(page, 'administrador');

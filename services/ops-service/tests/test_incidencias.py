@@ -304,3 +304,61 @@ class TestC9VentanaMantenimiento:
         resp = self._monitor_alert(client, "CRITICO", device_id=dev)
         assert resp.status_code == 200
         assert resp.json()["accion"] == "maintenance"
+
+
+class TestVisibilidadPorTecnico:
+    """Un técnico (header x-user-rol=tecnico) ve SOLO las correctivas asignadas a él.
+    Cubre el gap que dejó pasar la confusión de 'no veo mis incidencias': las
+    correctivas del monitor / manuales se asignan al coordinador o quedan sin asignar,
+    y el técnico correctamente NO las ve hasta que se le asignan.
+    Seed conftest: tecnico id=2, coordinador id=3."""
+
+    _TEC = {"x-user-rol": "tecnico", "x-user-id": "2"}
+
+    def _crear(self, client, device_id, responsable_id=None):
+        inc = client.post("/api/v1/incidencias", json={
+            "device_id": device_id, "tipo": "correctiva",
+        }).json()
+        if responsable_id is not None:
+            client.put(f"/api/v1/incidencias/{inc['id']}",
+                       json={"responsable_id": responsable_id})
+        return inc["id"]
+
+    def test_tecnico_ve_solo_las_suyas(self, client):
+        mia = self._crear(client, "T101", responsable_id=2)     # asignada al técnico
+        self._crear(client, "T102", responsable_id=3)           # del coordinador
+        self._crear(client, "T103", responsable_id=None)        # sin asignar
+
+        resp = client.get("/api/v1/incidencias", headers=self._TEC)
+        assert resp.status_code == 200
+        ids = [i["id"] for i in resp.json()["items"]]
+        assert ids == [mia]                                     # solo la suya
+
+    def test_tecnico_no_ve_las_del_coordinador(self, client):
+        self._crear(client, "T102", responsable_id=3)           # del coordinador
+        resp = client.get("/api/v1/incidencias", headers=self._TEC)
+        assert resp.json()["total"] == 0
+
+    def test_tecnico_no_ve_las_sin_asignar(self, client):
+        self._crear(client, "T103", responsable_id=None)        # sin asignar
+        resp = client.get("/api/v1/incidencias", headers=self._TEC)
+        assert resp.json()["total"] == 0
+
+    def test_coordinador_ve_todas(self, client):
+        self._crear(client, "T101", responsable_id=2)
+        self._crear(client, "T102", responsable_id=3)
+        self._crear(client, "T103", responsable_id=None)
+        # sin headers de técnico (coordinador/admin) -> ve todas
+        resp = client.get("/api/v1/incidencias")
+        assert resp.json()["total"] == 3
+
+    def test_tras_reasignar_al_tecnico_ya_la_ve(self, client):
+        # regresión del bug real: una correctiva del coordinador NO la ve el técnico
+        # hasta que se le RE-ASIGNA (responsable_id=2); entonces sí aparece.
+        inc_id = self._crear(client, "T102", responsable_id=3)  # coordinador
+        antes = client.get("/api/v1/incidencias", headers=self._TEC)
+        assert antes.json()["total"] == 0
+
+        client.put(f"/api/v1/incidencias/{inc_id}", json={"responsable_id": 2})
+        despues = client.get("/api/v1/incidencias", headers=self._TEC)
+        assert [i["id"] for i in despues.json()["items"]] == [inc_id]

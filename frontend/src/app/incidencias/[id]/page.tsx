@@ -59,7 +59,12 @@ export default function IncidenciaDetailPage() {
     Promise.all([fetchIncidencia(id), fetchUsuarios(), fetchRepuestos()])
       .then(([inc, users, reps]) => {
         setIncidencia(inc);
-        setEditResponsable(inc.responsable_id ? String(inc.responsable_id) : '');
+        // Solo pre-seleccionar el responsable actual si es un TÉCNICO ACTIVO (los que
+        // aparecen en el selector). Si la incidencia está asignada a la coordinadora
+        // (auto-creada por el monitor) o a alguien fuera de la lista, el selector queda
+        // en "Seleccionar técnico" — si no, el navegador mostraría el primer técnico
+        // pero el value seguiría siendo el id ajeno y "Re-asignar" no cambiaría nada.
+        setEditResponsable(safeEditResponsable(inc, users));
         setUsuarios(users);
         setRepuestos(reps);
         fetchProblemas().then((r) => setProblemas(r.items)).catch(() => {});
@@ -193,10 +198,19 @@ export default function IncidenciaDetailPage() {
     }
   }
 
+  // Pre-selecciona el responsable en el selector SOLO si es un técnico activo
+  // (los que aparecen en la lista); si no, deja el placeholder para forzar elección.
+  function safeEditResponsable(inc: { responsable_id: number | null }, users: Usuario[]) {
+    const esTecnicoActivo = users.some(
+      (u) => u.id === inc.responsable_id && u.rol === 'tecnico' && u.estado === 'activo',
+    );
+    return esTecnicoActivo && inc.responsable_id ? String(inc.responsable_id) : '';
+  }
+
   async function refreshIncidencia() {
     const refreshed = await fetchIncidencia(id);
     setIncidencia(refreshed);
-    setEditResponsable(refreshed.responsable_id ? String(refreshed.responsable_id) : '');
+    setEditResponsable(safeEditResponsable(refreshed, usuarios));
     if (refreshed.mantenimiento_correctivo) {
       setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
       setMtoAcciones(refreshed.mantenimiento_correctivo.acciones_realizadas ?? '');
