@@ -18,6 +18,8 @@ const MOCK_INCIDENCIA: Record<string, unknown> = {
 
 const MOCK_USUARIOS = [
   { id: 1, email: 'tecnico1@oefa.gob.pe', nombre: 'Juan', apellido: 'Perez', rol: 'tecnico', estado: 'activo' },
+  { id: 2, email: 'tecnico2@oefa.gob.pe', nombre: 'Ana', apellido: 'Lopez', rol: 'tecnico', estado: 'activo' },
+  { id: 3, email: 'exttecnico@oefa.gob.pe', nombre: 'Baja', apellido: 'Retirado', rol: 'tecnico', estado: 'inactivo' },
 ];
 
 const MOCK_REPUESTOS = [
@@ -88,6 +90,23 @@ test.describe('Incidencia detail page (flujo ITIL por rol)', () => {
     await expect(tecSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
     // NO se le pide llenar mantenimiento para asignar (no hay botón "Guardar mantenimiento")
     await expect(page.getByRole('button', { name: /Guardar mantenimiento/i })).toHaveCount(0);
+  });
+
+  // Coordinador: incidencia YA asignada (en_ejecucion) -> puede RE-ASIGNAR;
+  // la lista de responsables muestra solo técnicos ACTIVOS (excluye inactivos).
+  test('coordinador can re-assign on en_ejecucion; only active tecnicos listed', async ({ page }) => {
+    await injectFakeAuth(page, 'administrador');
+    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'en_ejecucion', responsable_id: 1 });
+    await gotoIncidencia(page);
+
+    // botón "Re-asignar" visible (no "Asignar")
+    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeVisible({ timeout: 15_000 });
+    const tecSelect = page.locator('select').first();
+    // técnicos activos presentes
+    await expect(tecSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
+    await expect(tecSelect.locator('option', { hasText: 'Ana Lopez' })).toBeAttached();
+    // técnico inactivo NO aparece
+    await expect(tecSelect.locator('option', { hasText: 'Baja Retirado' })).toHaveCount(0);
   });
 
   // Coordinador: incidencia resuelta -> puede VERIFICAR Y CERRAR

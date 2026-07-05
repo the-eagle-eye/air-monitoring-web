@@ -114,4 +114,32 @@ test.describe('Dashboard', () => {
     await page.waitForURL('**/login', { timeout: 10_000 });
     expect(page.url()).toContain('/login');
   });
+
+  // Caso 1: un equipo con salud SANO pero incidencia correctiva abierta debe
+  // seguir visible en "Equipos que requieren atención" como "En seguimiento".
+  test('equipo SANO con incidencia abierta aparece como En seguimiento', async ({ page }) => {
+    // T101 está SANO en HEALTH_STATE; le damos una correctiva abierta.
+    const openInc = {
+      items: [{
+        id: 42, device_id: 'T101', tipo: 'correctiva', estado: 'en_ejecucion',
+        prioridad: 'alta', origen: 'monitor_salud', responsable_id: 1,
+        created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+      }],
+      total: 1,
+    };
+    // re-registrar la ruta de incidencias (la última registrada tiene prioridad)
+    await page.route(`${GW}/api/v1/incidencias**`, (route) => {
+      const url = route.request().url();
+      // el dashboard pide pendiente y en_ejecucion por separado
+      if (url.includes('estado=en_ejecucion')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(openInc) });
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) });
+    });
+    await page.goto('/dashboard');
+
+    const seccion = page.locator('div', { hasText: /Equipos que requieren atenci/i }).last();
+    await expect(seccion.getByText('En seguimiento').first()).toBeVisible({ timeout: 10_000 });
+    await expect(seccion.getByText(/incidencia abierta/i).first()).toBeVisible();
+  });
 });

@@ -97,10 +97,13 @@ export default function IncidenciaDetailPage() {
   const hasMantenimiento = !!incidencia?.mantenimiento_correctivo;
 
   // Acciones disponibles por rol y estado (ITIL — estado avanza por acción):
-  //  - Coordinador ASIGNA (pendiente) -> en_ejecucion
+  //  - Coordinador ASIGNA (pendiente) -> en_ejecucion; y puede RE-ASIGNAR en
+  //    en_ejecucion (cambiar de técnico) sin cambiar el estado.
   //  - Técnico completa MANTENIMIENTO (en_ejecucion) -> resuelto
   //  - Coordinador VERIFICA Y CIERRA (resuelto) -> finalizado (+ calibración)
-  const canAsignar = isCoordinador && estado === 'pendiente';
+  const canAsignar =
+    isCoordinador && (estado === 'pendiente' || estado === 'en_ejecucion');
+  const yaAsignada = estado === 'en_ejecucion';
   const canRegistrarMantenimiento =
     isTecnico && !hasMantenimiento && (estado === 'en_ejecucion' || estado === 'pendiente');
   const canCerrar = isCoordinador && estado === 'resuelto';
@@ -116,9 +119,13 @@ export default function IncidenciaDetailPage() {
     setSaving(true);
     setSaveMsg(null);
     try {
+      const reasignando = yaAsignada;
       await updateIncidencia(id, { responsable_id: Number(editResponsable) });
       await refreshIncidencia();
-      setSaveMsg({ text: 'Incidencia asignada al técnico', isError: false });
+      setSaveMsg({
+        text: reasignando ? 'Incidencia re-asignada' : 'Incidencia asignada al técnico',
+        isError: false,
+      });
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
       setSaveMsg({ text: err instanceof Error ? err.message : 'Error al asignar', isError: true });
@@ -345,30 +352,41 @@ export default function IncidenciaDetailPage() {
               Responsable
             </dt>
             <dd className="mt-0.5">
-              {/* Coordinador ASIGNA (pendiente): selector + botón -> en_ejecucion */}
+              {/* Coordinador ASIGNA (pendiente) o RE-ASIGNA (en_ejecucion): selector
+                  + botón. Solo técnicos ACTIVOS. */}
               {canAsignar ? (
-                <div className="flex items-center gap-2">
-                  <select
-                    value={editResponsable}
-                    onChange={(e) => setEditResponsable(e.target.value)}
-                    className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                  >
-                    <option value="" disabled>Seleccionar técnico</option>
-                    {usuarios
-                      .filter((u) => u.rol === 'tecnico')
-                      .map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.nombre} {u.apellido}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    onClick={handleAsignar}
-                    disabled={saving || !editResponsable}
-                    className="rounded-md bg-blue-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    Asignar
-                  </button>
+                <div className="flex flex-col gap-1">
+                  {yaAsignada && (
+                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                      Asignada a:{' '}
+                      <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                        {responsable ? `${responsable.nombre} ${responsable.apellido}` : '—'}
+                      </span>
+                    </span>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={editResponsable}
+                      onChange={(e) => setEditResponsable(e.target.value)}
+                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                    >
+                      <option value="" disabled>Seleccionar técnico</option>
+                      {usuarios
+                        .filter((u) => u.rol === 'tecnico' && u.estado === 'activo')
+                        .map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.nombre} {u.apellido}
+                          </option>
+                        ))}
+                    </select>
+                    <button
+                      onClick={handleAsignar}
+                      disabled={saving || !editResponsable}
+                      className="rounded-md bg-blue-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      {yaAsignada ? 'Re-asignar' : 'Asignar'}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <span className="text-sm text-zinc-900 dark:text-zinc-100">

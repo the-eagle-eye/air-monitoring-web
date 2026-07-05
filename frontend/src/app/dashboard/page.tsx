@@ -204,7 +204,7 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <RiskDistributionChart data={healthDist} />
-        <EquiposAtencion states={healthStates} />
+        <EquiposAtencion states={healthStates} openIncidencias={openIncidencias} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
