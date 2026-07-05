@@ -324,3 +324,19 @@ def test_tecnico_cannot_post_calibracion():
 
 def test_coordinador_can_post_calibracion():
     assert check_write_permission("/api/v1/calibraciones", "POST", "coordinador") is True
+
+
+# -- C8: confirmar equipo en cuarentena lo pueden hacer coordinador/admin --
+def test_coordinador_can_confirmar_equipo():
+    assert check_write_permission(
+        "/api/v1/iot/equipos/T500/confirmar", "POST", "coordinador") is True
+
+
+def test_admin_can_confirmar_equipo():
+    assert check_write_permission(
+        "/api/v1/iot/equipos/T500/confirmar", "POST", "administrador") is True
+
+
+def test_tecnico_cannot_confirmar_equipo():
+    assert check_write_permission(
+        "/api/v1/iot/equipos/T500/confirmar", "POST", "tecnico") is False

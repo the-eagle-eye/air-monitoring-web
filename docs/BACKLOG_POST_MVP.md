@@ -35,7 +35,7 @@ están implementados y verificados; se listan para dar contexto.
 
 | # | Item | Estado | Notas |
 |---|---|---|---|
-| C8 | **Onboarding automatizado de estación nueva** | ❌ Pendiente | Hoy 100% manual (correr scripts). Flujo auto: detectar → warm-up → entrenar → activar θ. Requiere scheduler (ya existe). |
+| C8 | **Onboarding automatizado de estación nueva** | ✅ HECHO (2026-07-05) | Cuando llega una lectura de un `device_id` NO registrado: si cumple el **formato** de estación OEFA (`^(T\d{3}\|CA-[A-Z0-9]+-[A-Z0-9]+)$`, `device_onboarding.py`) se **auto-crea en CUARENTENA** (`estado="no_confirmado"`, `criticidad="media"`) y la lectura se persiste; si el formato es inválido (typo/basura) → 404 (protege el catálogo; el endpoint es público). Un equipo en cuarentena acumula lecturas pero el ensemble lo deja `SIN_DATOS` (sin θ → no dispara incidencias), así que es seguro. Coordinador/admin lo **confirman** (`POST /iot/equipos/{id}/confirmar` → `activo`, completa criticidad/metadatos); RBAC vía WRITE_EXCEPTIONS. `GET /iot/equipos/pendientes` lista la cuarentena. Frontend: panel "Equipos por confirmar" en /equipos con selector de criticidad + botón Confirmar. Tests: iot (auto-crea/rechaza/pendientes/confirma/409/404 + validador), gateway RBAC (coordinador/admin sí, técnico no), e2e (3). Ver `runbook-onboarding-estacion.md §C8`. **Warm-up/entrenamiento automático de θ = pieza aparte** (sigue manual; el onboarding del catálogo es lo automatizado aquí). **Hardening pendiente: API key por equipo** (§Autenticación). |
 | C9 | **Silenciamiento por mantenimiento (ventana explícita)** | ✅ HECHO (2026-07-05) | Ventana de mantenimiento DERIVADA del estado ITIL (sin flag persistido): arranca al asignar técnico (correctiva `pendiente`→`en_ejecucion`) y termina al cerrar (`finalizado`/`cancelado`). Durante la ventana la regla de consolidación hace **noop total** (ni crea ni escala; acción `maintenance`) — las anomalías durante la intervención son esperadas. Sólo `en_ejecucion` silencia: `pendiente` aún escala urgencia, `resuelto` no enmascara reincidencias. Choke point único `create_or_escalate_monitor_incidencia` (`_device_in_maintenance_window`), sin llamada cross-service (estado local de ops), fail-safe. Tests ops `TestC9VentanaMantenimiento` (C9-01..04). Ver `regla-consolidacion-alertas.md §C9`. |
 | C10 | **Validación de escala de sensores en ingesta** | ✅ HECHO (2026-07-05) | `ensemble_notify_service` valida que las 4 features caigan en el rango físico de la escala OEFA (`OEFA_RANGES`; discriminadores claros: flow>10 o lamp>300 = escala Thermo). Fuera de rango → `valido=0` → gate §3.0 → SIN_DATOS (fallback seguro), evitando el `recon_error`~1e9. NO convierte unidades (no se conoce la fórmula); rechaza limpiamente. Verificado E2E: lectura Thermo → SIN_DATOS; lectura OEFA → SANO normal. Tests: iot `test_ensemble_notify.py` (rechazo Thermo, aceptación OEFA, frontera, parcial, E2E) + ml `test_health_service.py` (defensa en profundidad: el ensemble sigue robusto). Ver `memory/project_c1_scale_bug.md`. |
 
@@ -74,6 +74,12 @@ están implementados y verificados; se listan para dar contexto.
 5. **Amazon Cognito** - Migrar de JWT propio a Cognito
 6. **Rate limiting** - Proteccion contra abuso en endpoints IoT
 7. **API versioning avanzado** - Versionado independiente por microservicio
+8. **API key por equipo para ingesta IoT** (hardening de C8) - Hoy `POST /iot/readings` es
+   público (los CR310 no autentican) y C8 se protege solo por formato del `device_id`.
+   Endurecimiento: cada datalogger envía `X-API-Key`; el iot-service valida contra una
+   tabla `device_credentials` (guarda solo el hash; la key se muestra una vez al aprobar
+   el equipo en cuarentena). Modelo revocable por equipo. Alternativa mayor: mTLS/certificados
+   por datalogger. Complementa (no reemplaza) la validación de formato de C8.
 
 ## Funcionalidades
 8. **Exportacion reportes** - PDF (WeasyPrint) y Excel (openpyxl)

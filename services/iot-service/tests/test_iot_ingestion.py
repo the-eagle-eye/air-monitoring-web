@@ -13,7 +13,8 @@ class TestPostReading:
         assert data["sensors"]["H2S_lamp_int"] == 76.5
         assert data["procesado"] is False
 
-    def test_post_reading_unknown_equipo(self, client):
+    def test_post_reading_unknown_equipo_invalid_format(self, client):
+        # 'UNKNOWN' no cumple el formato de estación -> rechazado (no se auto-crea)
         payload = {**VALID_READING_PAYLOAD, "equipo": "UNKNOWN"}
         response = client.post("/api/v1/iot/readings", json=payload)
         assert response.status_code == 404
@@ -145,3 +146,75 @@ class TestEquipos:
     def test_delete_equipo_not_found(self, client):
         response = client.delete("/api/v1/iot/equipos/UNKNOWN")
         assert response.status_code == 404
+
+
+class TestC8OnboardingAutomatico:
+    """C8: onboarding automático de estación nueva en cuarentena.
+    docs/runbook-onboarding-estacion.md §C8."""
+
+    def test_reading_valido_desconocido_autocrea_en_cuarentena(self, client):
+        # device_id con formato válido pero no registrado -> se auto-crea 'no_confirmado'
+        payload = {**VALID_READING_PAYLOAD, "equipo": "T500"}
+        resp = client.post("/api/v1/iot/readings", json=payload)
+        assert resp.status_code == 200          # la lectura se acepta
+        assert resp.json()["equipo_device_id"] == "T500"
+
+        eq = client.get("/api/v1/iot/equipos/T500").json()
+        assert eq["estado"] == "no_confirmado"  # en cuarentena
+        assert eq["criticidad"] == "media"       # default seguro
+        assert eq["serie"] is None               # metadatos vacíos hasta confirmar
+
+    def test_reading_formato_estacion_campo_autocrea(self, client):
+        # el otro esquema real de device_id (estación de campo CA-XXX-##)
+        payload = {**VALID_READING_PAYLOAD, "equipo": "CA-PUNO-07"}
+        resp = client.post("/api/v1/iot/readings", json=payload)
+        assert resp.status_code == 200
+        assert client.get("/api/v1/iot/equipos/CA-PUNO-07").json()["estado"] == "no_confirmado"
+
+    def test_reading_formato_invalido_se_rechaza(self, client):
+        # typos / basura NO se auto-crean (protege el catálogo; endpoint público)
+        for bad in ["t101", "T10", "TABC", "CA-", "'; DROP TABLE equipos;--"]:
+            resp = client.post(
+                "/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": bad}
+            )
+            assert resp.status_code == 404, f"{bad!r} debería rechazarse"
+
+    def test_equipos_pendientes_lista_solo_cuarentena(self, client):
+        client.post("/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": "T500"})
+        client.post("/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": "T501"})
+        pend = client.get("/api/v1/iot/equipos/pendientes").json()
+        ids = {e["device_id"] for e in pend}
+        assert ids == {"T500", "T501"}          # solo las cuarentenadas
+        assert all(e["estado"] == "no_confirmado" for e in pend)
+        # los seed activos (T101..T103) NO aparecen
+        assert "T101" not in ids
+
+    def test_confirmar_activa_y_completa_metadatos(self, client):
+        client.post("/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": "T500"})
+        resp = client.post("/api/v1/iot/equipos/T500/confirmar", json={
+            "nombre": "Analizador SO2 Puno",
+            "marca": "Thermo",
+            "criticidad": "alta",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["estado"] == "activo"
+        assert data["criticidad"] == "alta"
+        assert data["nombre"] == "Analizador SO2 Puno"
+        # ya no está en pendientes
+        pend = client.get("/api/v1/iot/equipos/pendientes").json()
+        assert "T500" not in {e["device_id"] for e in pend}
+
+    def test_confirmar_equipo_ya_activo_da_409(self, client):
+        # T101 (seed) ya está activo -> no se puede "confirmar"
+        resp = client.post("/api/v1/iot/equipos/T101/confirmar", json={})
+        assert resp.status_code == 409
+
+    def test_confirmar_equipo_inexistente_da_404(self, client):
+        resp = client.post("/api/v1/iot/equipos/T999/confirmar", json={})
+        assert resp.status_code == 404
+
+    def test_lectura_de_equipo_activo_no_cambia_estado(self, client):
+        # regresión: un equipo ya activo sigue activo tras recibir lecturas
+        client.post("/api/v1/iot/readings", json=VALID_READING_PAYLOAD)  # T101
+        assert client.get("/api/v1/iot/equipos/T101").json()["estado"] == "activo"

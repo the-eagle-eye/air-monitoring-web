@@ -47,3 +47,19 @@ export async function deleteEquipo(deviceId: string): Promise<{ detail: string }
     method: 'DELETE',
   });
 }
+
+// C8: onboarding automático — equipos en cuarentena (estado no_confirmado).
+export async function fetchEquiposPendientes(): Promise<Equipo[]> {
+  return apiFetch<Equipo[]>('/api/v1/iot/equipos/pendientes', { service: 'iot' });
+}
+
+export async function confirmarEquipo(
+  deviceId: string,
+  data: Partial<Omit<Equipo, 'id' | 'device_id' | 'fecha_registro' | 'estado'>> = {},
+): Promise<Equipo> {
+  return apiFetch<Equipo>(`/api/v1/iot/equipos/${deviceId}/confirmar`, {
+    service: 'iot',
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}

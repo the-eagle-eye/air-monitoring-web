@@ -51,6 +51,15 @@ WRITE_EXCEPTIONS = [
         "methods": {"PUT"},
         "roles": {"tecnico", "coordinador", "administrador"},
     },
+    # C8: confirmar un equipo en cuarentena (no_confirmado -> activo) lo puede hacer
+    # el coordinador o admin (gestión operativa del catálogo). Los equipos viven en
+    # iot-service bajo /api/v1/iot/equipos.
+    {
+        "pattern": "/api/v1/iot/equipos/",
+        "suffix": "/confirmar",
+        "methods": {"POST"},
+        "roles": {"coordinador", "administrador"},
+    },
 ]
 
 

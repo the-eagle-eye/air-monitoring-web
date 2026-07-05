@@ -6,7 +6,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.equipo import Equipo
 from app.models.lectura_iot import LecturaIoT
-from app.schemas.equipo import EquipoCreate, EquipoResponse, EquipoUpdate
+from app.schemas.equipo import (
+    EquipoConfirmar,
+    EquipoCreate,
+    EquipoResponse,
+    EquipoUpdate,
+)
 from app.schemas.lectura_iot import (
     LecturaIoTCreate,
     LecturaIoTDetail,
@@ -14,6 +19,10 @@ from app.schemas.lectura_iot import (
     LecturaIoTResponse,
 )
 from app.services.ingestion_service import validate_and_store_reading
+from app.services.device_onboarding import (
+    ESTADO_NO_CONFIRMADO,
+    ESTADO_ACTIVO,
+)
 
 router = APIRouter()
 
@@ -122,6 +131,18 @@ def list_equipos(db: Session = Depends(get_db)):
     return db.query(Equipo).order_by(Equipo.device_id).all()
 
 
+# C8: equipos en cuarentena pendientes de confirmar. Debe ir ANTES de la ruta
+# /equipos/{device_id} para no ser capturada como device_id="pendientes".
+@router.get("/equipos/pendientes", response_model=list[EquipoResponse])
+def list_equipos_pendientes(db: Session = Depends(get_db)):
+    return (
+        db.query(Equipo)
+        .filter(Equipo.estado == ESTADO_NO_CONFIRMADO)
+        .order_by(Equipo.fecha_registro.desc())
+        .all()
+    )
+
+
 @router.get("/equipos/{device_id}", response_model=EquipoResponse)
 def get_equipo(device_id: str, db: Session = Depends(get_db)):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
@@ -143,6 +164,32 @@ def create_equipo(data: EquipoCreate, db: Session = Depends(get_db)):
         )
     equipo = Equipo(**data.model_dump())
     db.add(equipo)
+    db.commit()
+    db.refresh(equipo)
+    return equipo
+
+
+# C8: confirmar un equipo en cuarentena (no_confirmado -> activo). RBAC en el
+# gateway lo restringe a coordinador/admin.
+@router.post("/equipos/{device_id}/confirmar", response_model=EquipoResponse)
+def confirmar_equipo(
+    device_id: str, data: EquipoConfirmar, db: Session = Depends(get_db)
+):
+    equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
+    if not equipo:
+        raise HTTPException(
+            status_code=404, detail=f"Equipo '{device_id}' no encontrado"
+        )
+    if equipo.estado != ESTADO_NO_CONFIRMADO:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Equipo '{device_id}' no está en cuarentena (estado: {equipo.estado})",
+        )
+    # completar metadatos provistos (solo los enviados) y activar
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(equipo, field, value)
+    equipo.estado = ESTADO_ACTIVO
+    equipo.fecha_actualizacion = datetime.now(timezone.utc)
     db.commit()
     db.refresh(equipo)
     return equipo

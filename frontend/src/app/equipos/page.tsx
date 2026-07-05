@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { fetchEquipos } from '@/lib/api/lecturas';
 import { useAuth } from '@/lib/auth';
 import EquiposTable from '@/components/equipos/EquiposTable';
+import EquiposPendientes from '@/components/equipos/EquiposPendientes';
 import type { Equipo } from '@/types/lectura';
 
 export default function EquiposPage() {
@@ -14,13 +15,17 @@ export default function EquiposPage() {
   const { user } = useAuth();
 
   const canEdit = user?.rol === 'administrador';
+  // C8: confirmar equipos en cuarentena = coordinador/admin
+  const canConfirm = user?.rol === 'coordinador' || user?.rol === 'administrador';
 
-  useEffect(() => {
+  const loadEquipos = useCallback(() => {
     fetchEquipos()
       .then(setEquipos)
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => { loadEquipos(); }, [loadEquipos]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
@@ -42,6 +47,10 @@ export default function EquiposPage() {
         <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
           {error}
         </div>
+      )}
+
+      {canConfirm && (
+        <EquiposPendientes canConfirm={canConfirm} onConfirmed={loadEquipos} />
       )}
 
       {loading ? (

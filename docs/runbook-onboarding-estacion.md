@@ -73,7 +73,36 @@ No hay datos propios todavía. Dos sub-opciones:
 
 **CO-05.** El `model_card.json` / `theta_<sid>.json` registra la ventana de datos y el origen (histórico propio vs warm-up) para trazabilidad ISO 17025.
 
-## Trabajo futuro (automatización)
+## §C8 — Onboarding automático del catálogo (✅ 2026-07-05)
 
-- Flujo automático: detectar estación nueva → acumular warm-up → entrenar → activar θ, sin intervención manual.
-- Requiere el scheduler que tampoco existe hoy (ver `spec-transmision-y-reentrenamiento.md`).
+Cuando una estación **no registrada** empieza a enviar lecturas a `POST /iot/readings`,
+el sistema ya no la rechaza en seco: la **acoge en cuarentena** automáticamente.
+
+**Flujo:**
+1. Llega una lectura con un `device_id` desconocido.
+2. **Validación de formato** (`device_onboarding.is_valid_device_id`): debe cumplir el
+   patrón de estación OEFA `^(T\d{3}|CA-[A-Z0-9]+-[A-Z0-9]+)$` (los dos esquemas reales:
+   `T101`, `CA-UCHU-01`). Si NO cumple (typo/basura) → **404**, no se crea nada (el
+   endpoint es público, esto protege el catálogo).
+3. Si cumple → se **auto-crea el equipo** con `estado="no_confirmado"` (cuarentena),
+   `criticidad="media"` por defecto, resto de metadatos NULL. La lectura se persiste.
+4. El equipo en cuarentena **acumula lecturas** pero el ensemble lo reporta `SIN_DATOS`
+   (no tiene θ entrenado) → **no dispara incidencias**. Es inofensivo hasta su onboarding.
+5. Un **coordinador/admin** lo ve en el panel "Equipos por confirmar" (`GET
+   /iot/equipos/pendientes`) y lo **confirma** (`POST /iot/equipos/{id}/confirmar`):
+   pasa a `activo`, y de paso asigna criticidad y completa serie/marca/modelo.
+
+**Qué automatiza C8:** el alta del equipo en el catálogo (detección + cuarentena +
+aprobación). **Qué sigue siendo manual:** el warm-up y el entrenamiento de θ (escenarios
+A/B.1/B.2 de arriba) — un equipo confirmado sigue en `SIN_DATOS` hasta que se le entrena
+su θ propio.
+
+**Seguridad:** la validación de formato filtra errores honestos, no actores maliciosos.
+El endurecimiento previsto es una **API key por equipo** para autenticar los CR310 (ver
+`BACKLOG_POST_MVP.md` §Autenticación, ítem 8).
+
+## Trabajo futuro (automatización del θ)
+
+- Flujo automático del MODELO: estación confirmada → acumular warm-up → entrenar → activar
+  θ, sin intervención manual. (C8 ya cubre el alta del catálogo; falta esta pieza del θ.)
+- Requiere enganchar el scheduler existente (ver `spec-transmision-y-reentrenamiento.md`).

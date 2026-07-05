@@ -41,6 +41,26 @@ class EquipoUpdate(BaseModel):
     criticidad: str | None = None
 
 
+class EquipoConfirmar(BaseModel):
+    """C8: confirmar un equipo en cuarentena (no_confirmado -> activo).
+
+    Todos los campos son opcionales: el coordinador puede solo aprobar, o aprobar
+    y completar metadatos (serie/marca/criticidad) en el mismo paso.
+    """
+    nombre: str | None = None
+    tipo: str | None = None
+    ubicacion: str | None = None
+    serie: str | None = None
+    codigo_interno: str | None = None
+    modelo: str | None = None
+    marca: str | None = None
+    fecha_ingreso: date | None = None
+    rango_medicion: str | None = None
+    parametro_medicion: str | None = None
+    datalogger_id: int | None = None
+    criticidad: str | None = None
+
+
 class EquipoResponse(EquipoBase):
     id: int
     fecha_registro: datetime
