@@ -1,0 +1,8 @@
+{
+  "station_id": "CA-UCHU-01",
+  "theta": 0.515376407595006,
+  "theta_train": 0.5786967716740512,
+  "theta_recalibrated": 0.515376407595006,
+  "theta_source": "recalibrated_warmup",
+  "theta_percentile": 95
+}

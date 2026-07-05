@@ -1,0 +1,8 @@
+{
+  "station_id": "CA-ILO-01",
+  "theta": 1.905513799981377,
+  "theta_train": 0.4501289930849132,
+  "theta_recalibrated": 1.905513799981377,
+  "theta_source": "recalibrated_warmup",
+  "theta_percentile": 95
+}

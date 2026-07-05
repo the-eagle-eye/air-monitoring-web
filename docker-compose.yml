@@ -25,6 +25,8 @@ services:
       - DATABASE_URL=postgresql://airmon:airmon123@db:5432/airmonitoring
       - IOT_SERVICE_URL=http://iot-service:8001
       - ML_SERVICE_URL=http://ml-service:8002
+      - ML_ISOLATION_SERVICE_URL=http://ml-service-isolation:8004
+      - ML_BACKEND=${ML_BACKEND:-legacy}
       - OPS_SERVICE_URL=http://ops-service:8003
       - SECRET_KEY=dev-secret-key-change-in-production
     depends_on:
@@ -67,6 +69,7 @@ services:
       - ML_SERVICE_URL=http://ml-service:8002
       - OPS_SERVICE_URL=http://ops-service:8003
       - ML_ARTIFACTS_PATH=/app/ml_artifacts
+      - ENSEMBLE_ARTIFACTS_PATH=/app/ml_artifacts_ensemble_v1
     depends_on:
       db:
         condition: service_healthy
@@ -74,9 +77,34 @@ services:
       - ./shared:/app/shared
       - ./services/ml-service/app:/app/app
       - ./services/ml-service/ml_artifacts:/app/ml_artifacts
+      - ./services/ml-service/ml_artifacts_ensemble_v1:/app/ml_artifacts_ensemble_v1
+      - ./services/ml-service/scripts:/app/scripts
+      - ./services/ml-proposal/dataset:/app/dataset_ensemble:ro
       - ./services/ml-service/migrations:/app/migrations
       - ./services/ml-service/alembic.ini:/app/alembic.ini
       - ./services/ml-service/tests:/app/tests
+
+  ml-service-isolation:
+    build:
+      context: .
+      dockerfile: services/ml-service-isolation/Dockerfile
+    ports:
+      - "8004:8004"
+    environment:
+      - DATABASE_URL=postgresql://airmon:airmon123@db:5432/airmonitoring
+      - IOT_SERVICE_URL=http://iot-service:8001
+      - OPS_SERVICE_URL=http://ops-service:8003
+      - ML_ARTIFACTS_V3_PATH=/app/ml_artifacts_v3
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./shared:/app/shared
+      - ./services/ml-service-isolation/app:/app/app
+      - ./services/ml-service-isolation/ml_artifacts_v3:/app/ml_artifacts_v3
+      - ./services/ml-service-isolation/migrations:/app/migrations
+      - ./services/ml-service-isolation/alembic.ini:/app/alembic.ini
+      - ./services/ml-service-isolation/tests:/app/tests
 
   ops-service:
     build:

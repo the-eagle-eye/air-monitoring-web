@@ -1,27 +1,20 @@
 import type { Equipo } from './lectura';
-import type { Prediccion, Alerta } from './prediccion';
 
 export interface DashboardData {
   equipos: Equipo[];
-  latestPredictions: Record<string, Prediccion>;
-  alertas: Alerta[];
-  totalAlertas: number;
 }
 
+// KPIs del modelo ensemble (no supervisado). Reemplazan las KPIs RF (RUL,
+// predicciones, alertas) que quedaron deprecadas al migrar del Random Forest.
 export interface KpiData {
   totalEquipos: number;
-  alertasAltas: number;
-  rulPromedio: number;
-  prediccionesRecientes: number;
+  anomalias24h: number;      // equipos con estado anómalo (observado/riesgo/crítico)
+  incidenciasAbiertas: number;
+  sinTransmision: number;
 }
 
 export interface RiskDistribution {
   name: string;
   value: number;
   color: string;
-}
-
-export interface EquipoHealth {
-  equipo: Equipo;
-  prediction: Prediccion | null;
 }

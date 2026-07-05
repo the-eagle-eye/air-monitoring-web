@@ -4,13 +4,16 @@ from fastapi import APIRouter, Request, Response
 from app.config import settings
 from app.auth.jwt_handler import verify_token
 from app.auth.rbac import is_public_route, check_write_permission, check_read_permission
+from app.services.ml_adapter import adapt_json_bytes
 
 router = APIRouter()
 
-SERVICE_MAP = {
+# Routes that live on the ML backend. Which backend depends on ML_BACKEND.
+_ML_ROUTE_PREFIXES = ("/api/v1/predictions", "/api/v1/alerts")
+
+# Non-ML routes.
+_STATIC_SERVICE_MAP = {
     "/api/v1/iot": settings.IOT_SERVICE_URL,
-    "/api/v1/predictions": settings.ML_SERVICE_URL,
-    "/api/v1/alerts": settings.ML_SERVICE_URL,
     "/api/v1/equipos": settings.OPS_SERVICE_URL,
     "/api/v1/incidencias": settings.OPS_SERVICE_URL,
     "/api/v1/calibraciones": settings.OPS_SERVICE_URL,
@@ -19,14 +22,32 @@ SERVICE_MAP = {
     "/api/v1/repuestos": settings.OPS_SERVICE_URL,
     "/api/v1/proveedores": settings.OPS_SERVICE_URL,
     "/api/v1/reportes": settings.OPS_SERVICE_URL,
+    # Monitor de salud no supervisado (ensemble AE+IF+AND). Va directo al
+    # ml-service sin la adaptación de respuesta de _ML_ROUTE_PREFIXES.
+    "/api/v1/health-monitor": settings.ML_SERVICE_URL,
 }
 
 
+def _ml_upstream() -> str:
+    if settings.ML_BACKEND == "isolation":
+        return settings.ML_ISOLATION_SERVICE_URL
+    return settings.ML_SERVICE_URL
+
+
 def _resolve_upstream(path: str) -> str | None:
-    for prefix, url in SERVICE_MAP.items():
+    for prefix in _ML_ROUTE_PREFIXES:
+        if path.startswith(prefix):
+            return _ml_upstream()
+    for prefix, url in _STATIC_SERVICE_MAP.items():
         if path.startswith(prefix):
             return url
     return None
+
+
+def _should_adapt_ml_response(path: str) -> bool:
+    if settings.ML_BACKEND != "isolation":
+        return False
+    return any(path.startswith(p) for p in _ML_ROUTE_PREFIXES)
 
 
 def _authenticate(request: Request) -> dict | None:
@@ -107,8 +128,12 @@ async def proxy(request: Request, path: str):
             headers=headers,
         )
 
+    content = resp.content
+    if _should_adapt_ml_response(full_path) and resp.status_code < 400:
+        content = adapt_json_bytes(content)
+
     return Response(
-        content=resp.content,
+        content=content,
         status_code=resp.status_code,
         media_type=resp.headers.get("content-type", "application/json"),
     )

@@ -1,6 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { readSensor } from '@/lib/sensorFields';
 import type { LecturaIoT } from '@/types/lectura';
 
 const SENSOR_LINES = [
@@ -99,12 +100,12 @@ export default function SensorTrendsChart({
 }: SensorTrendsChartProps) {
   const chartData = lecturas.map((l) => ({
     timestamp: formatTimestamp(l.timestamp_lectura),
-    so2_ppb: l.so2_ppb,
-    h2s_ppb: l.h2s_ppb,
-    reaction_temp: l.reaction_temp,
-    box_temp: l.box_temp,
-    sample_flow: l.sample_flow,
-    uv_lamp_intensity: l.uv_lamp_intensity,
+    so2_ppb: readSensor(l, 'so2_ppb'),
+    h2s_ppb: readSensor(l, 'h2s_ppb'),
+    reaction_temp: readSensor(l, 'reaction_temp'),
+    box_temp: readSensor(l, 'box_temp'),
+    sample_flow: readSensor(l, 'sample_flow'),
+    uv_lamp_intensity: readSensor(l, 'uv_lamp_intensity'),
   }));
 
   return (

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.v1.router import router as v1_router
 from app.config import settings
 from app.ml.model_interface import model_manager
+from app.scheduler import shutdown_scheduler, start_scheduler
 
 app = FastAPI(
     title="Air Monitoring - ML Service",
@@ -31,6 +32,13 @@ def load_models():
         print(f"ML models loaded (version: {model_manager.model_version})")
     else:
         print(f"WARNING: No model artifacts found at {artifacts_path}")
+    # watchdog de transmisión (docs/spec-transmision-y-reentrenamiento.md §1)
+    start_scheduler()
+
+
+@app.on_event("shutdown")
+def stop_scheduler():
+    shutdown_scheduler()
 
 
 @app.get("/health")

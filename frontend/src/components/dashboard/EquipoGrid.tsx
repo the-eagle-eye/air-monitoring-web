@@ -1,19 +1,34 @@
 import type { Equipo } from '@/types/lectura';
-import type { Prediccion } from '@/types/prediccion';
+import type { HealthDeviceState } from '@/types/healthMonitor';
+import type { Incidencia } from '@/types/ops';
 import EquipoCard from './EquipoCard';
 
 interface EquipoGridProps {
   equipos: Equipo[];
-  predictions: Record<string, Prediccion>;
+  healthStates?: Record<string, HealthDeviceState | null>;
+  openIncidencias?: Incidencia[];
 }
 
-const RISK_PRIORITY: Record<string, number> = {
-  alta: 0,
-  media: 1,
-  baja: 2,
+// Orden por severidad de salud del ensemble (más grave primero).
+const HEALTH_PRIORITY: Record<string, number> = {
+  CRITICO: 0,
+  EN_RIESGO: 1,
+  OBSERVADO: 2,
+  SANO: 3,
+  SIN_DATOS: 4,
 };
 
-export default function EquipoGrid({ equipos, predictions }: EquipoGridProps) {
+export default function EquipoGrid({
+  equipos,
+  healthStates = {},
+  openIncidencias = [],
+}: EquipoGridProps) {
+  // Conteo de incidencias abiertas por equipo (pendiente/en_ejecucion).
+  const incidenciasPorEquipo: Record<string, number> = {};
+  for (const inc of openIncidencias) {
+    incidenciasPorEquipo[inc.device_id] =
+      (incidenciasPorEquipo[inc.device_id] ?? 0) + 1;
+  }
   if (equipos.length === 0) {
     return (
       <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center text-sm text-zinc-400 dark:border-zinc-700 dark:bg-zinc-900">
@@ -23,11 +38,11 @@ export default function EquipoGrid({ equipos, predictions }: EquipoGridProps) {
   }
 
   const sorted = [...equipos].sort((a, b) => {
-    const riskA = predictions[a.device_id]?.risk_level;
-    const riskB = predictions[b.device_id]?.risk_level;
-    const priorityA = riskA ? (RISK_PRIORITY[riskA] ?? 3) : 3;
-    const priorityB = riskB ? (RISK_PRIORITY[riskB] ?? 3) : 3;
-    return priorityA - priorityB;
+    const sa = healthStates[a.device_id]?.health_state;
+    const sb = healthStates[b.device_id]?.health_state;
+    const pa = sa ? (HEALTH_PRIORITY[sa] ?? 5) : 5;
+    const pb = sb ? (HEALTH_PRIORITY[sb] ?? 5) : 5;
+    return pa - pb;
   });
 
   return (
@@ -40,7 +55,8 @@ export default function EquipoGrid({ equipos, predictions }: EquipoGridProps) {
           <div key={equipo.device_id} className="min-w-[280px] flex-shrink-0 self-stretch">
             <EquipoCard
               equipo={equipo}
-              prediction={predictions[equipo.device_id] ?? null}
+              health={healthStates[equipo.device_id] ?? null}
+              incidenciasAbiertas={incidenciasPorEquipo[equipo.device_id] ?? 0}
             />
           </div>
         ))}

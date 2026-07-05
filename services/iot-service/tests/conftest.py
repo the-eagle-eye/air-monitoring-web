@@ -75,17 +75,23 @@ def client():
 
 VALID_READING_PAYLOAD = {
     "equipo": "T101",
-    "SO2_ppb": 25.43,
-    "H2S_ppb": 2.18,
-    "Reaction_Temp": 35.0,
-    "IZS_Temp": 34.2,
-    "PMT_Temp": 36.1,
-    "SampleFlow": 452.3,
-    "Pressure": 29.76,
-    "UVLampIntensity": 403.5,
-    "Box_Temp": 33.7,
-    "HVPS_V": 671.2,
-    "Conv_Temp": 35.9,
-    "Ozone_flow": 480.5,
     "timestamp": "2025-10-27 18:30:00",
+    # SO2 analyzer
+    "SO2_ppb": 25.43,
+    "SO2_flow": 0.85,
+    "SO2_lamp_int": 83.2,
+    "SO2_internal_temp": 48.1,
+    # H2S analyzer
+    "H2S_ppb": 2.18,
+    "H2S_flow": 0.91,
+    "H2S_lamp_int": 76.5,
+    "H2S_internal_temp": 46.3,
+    # NOx analyzer
+    "NO2_ppb": 1.4,
+    "NO2_flow": 0.72,
+    "NO2_conv_temp": 318.0,
+    # Legacy fields still accepted
+    "Reaction_Temp": 35.0,
+    "Pressure": 29.76,
+    "Box_Temp": 33.7,
 }

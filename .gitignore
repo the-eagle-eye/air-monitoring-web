@@ -60,7 +60,30 @@ dataset/
 logs/
 .claude
 
-# Docs (internal/specs - not for repo)
-air-monitoring-spec.md
-BACKLOG_POST_MVP.md
-GUIA_DESPLIEGUE_AWS.md
+# Documentacion tecnica del proyecto (specs, backlog, reglas) SI se versiona.
+# Se excluyen entregables binarios y material no-repo.
+reports/*
+mockups/*
+*.xlsx
+*.ppt
+*.pptx
+*.docx
+*.txt
+frontend/playwright-report/
+frontend/test-results/
+catalogos_amvu.json
+ml.md
+run_tests.sh
+*.png
+*.csv
+
+# Datasets y experimentos ML pesados (no van al repo)
+services/ml-proposal/
+services/ml-service/data/
+services/ml-service/ml_artifacts_v2/
+services/ml-service/ml_artifacts_v2_1/
+# Experimentos/backends ML no activos (PRs separados)
+services/ml-service-isolation/
+services/ml-service/scripts/v2/
+services/ml-service/scripts/v2_1/
+services/ml-service/scripts/health_monitor_poc/

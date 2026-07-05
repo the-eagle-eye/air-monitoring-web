@@ -1,0 +1,17 @@
+{
+  "contamination": 0.05,
+  "theta_percentile": 95,
+  "severity_multipliers": {
+    "observado": 1.0,
+    "en_riesgo": 2.0,
+    "critico": 3.0
+  },
+  "features": [
+    "SO2_PPB",
+    "SO2_FLOW",
+    "SO2_INTERNAL_TEMP",
+    "SO2_LAMP_INT",
+    "hours_since_prev"
+  ],
+  "random_seed": 42
+}

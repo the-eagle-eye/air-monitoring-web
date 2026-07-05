@@ -10,6 +10,7 @@ class IncidenciaCreate(BaseModel):
     tipo: Literal["correctiva", "calibracion"]
     descripcion: str | None = None
     prioridad: Literal["alta", "media", "baja"] = "media"
+    origen: Literal["manual", "monitor_salud", "prediccion_rul"] = "manual"
     responsable_id: int | None = None
 
 
@@ -28,6 +29,7 @@ class IncidenciaResponse(BaseModel):
     descripcion: str | None = None
     estado: str
     prioridad: str
+    origen: str = "manual"
     responsable_id: int | None = None
     created_at: datetime
     updated_at: datetime | None = None

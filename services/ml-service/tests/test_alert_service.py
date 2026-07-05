@@ -67,26 +67,13 @@ def test_get_alerts_filters(mock_notify, db_session):
     assert total == 2
 
 
+# RETIRO RF: el flujo RF ya NO crea incidencias (lo hace el monitor de salud).
+# evaluate_and_create_alert persiste la Alerta pero no notifica a ops.
+# Ver docs/spec-racionalizacion-dashboard-e-incidencias.md (Decisión B1+C1).
 @patch("app.services.alert_service._notify_ops_alert")
-def test_alta_alert_notifies_ops_service(mock_notify, db_session):
-    """Alta alert should trigger ops-service notification."""
+def test_rf_no_longer_notifies_ops(mock_notify, db_session):
+    """Tras el retiro del RF, evaluate_and_create_alert NO dispara incidencias."""
     pred = _create_prediccion(db_session, rul=25, risk="alta", prob=0.85)
-    evaluate_and_create_alert(db_session, pred)
-    mock_notify.assert_called_once_with("T101", "alta")
-
-
-@patch("app.services.alert_service._notify_ops_alert")
-def test_media_alert_notifies_ops(mock_notify, db_session):
-    """Media alert should trigger ops-service notification."""
-    pred = _create_prediccion(db_session, rul=50, risk="media", prob=0.4)
-    evaluate_and_create_alert(db_session, pred)
-    mock_notify.assert_called_once_with("T101", "media")
-
-
-@patch("app.services.alert_service._notify_ops_alert")
-def test_baja_alert_does_not_notify_ops(mock_notify, db_session):
-    """Baja alert should NOT trigger ops-service notification."""
-    pred = _create_prediccion(db_session, rul=80, risk="baja", prob=0.1)
     evaluate_and_create_alert(db_session, pred)
     mock_notify.assert_not_called()
 
@@ -125,8 +112,7 @@ def test_deactivate_alerts_idempotent(mock_notify, db_session):
     assert deactivate_alerts(db_session, "T101") == 0
 
 
-def test_notify_ops_handles_failure():
-    """Failure to reach ops-service should not raise."""
+def test_notify_ops_is_noop_after_rf_retirement():
+    """_notify_ops_alert quedó como no-op tras el retiro del RF; no debe lanzar."""
     from app.services.alert_service import _notify_ops_alert
-    with patch("app.services.alert_service.httpx.post", side_effect=Exception("conn refused")):
-        _notify_ops_alert("T101", "alta")  # Should not raise
+    _notify_ops_alert("T101", "alta")  # no-op, no debe lanzar

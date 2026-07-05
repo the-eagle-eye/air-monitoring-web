@@ -5,13 +5,14 @@ import Link from 'next/link';
 import { usePolling } from '@/hooks/usePolling';
 import { fetchIncidencias, fetchRepuestos } from '@/lib/api/ops';
 import { fetchEquipos } from '@/lib/api/lecturas';
-import { fetchPredicciones } from '@/lib/api/predicciones';
+import { fetchHealthStates } from '@/lib/api/healthMonitor';
 import Badge from '@/components/ui/Badge';
 import StatusBadge from '@/components/ui/StatusBadge';
-import RiskBadge from '@/components/ui/RiskBadge';
+import HealthStateBadge from '@/components/dashboard/HealthStateBadge';
 import type { Incidencia, Repuesto } from '@/types/ops';
 import type { Equipo } from '@/types/lectura';
-import type { Prediccion } from '@/types/prediccion';
+import type { HealthDeviceState } from '@/types/healthMonitor';
+import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
 
 const PRIORIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
   alta: 'danger',
@@ -45,7 +46,7 @@ export default function DashboardTecnicoPage() {
   const [enEjecucion, setEnEjecucion] = useState<Incidencia[]>([]);
   const [finalizadas, setFinalizadas] = useState<Incidencia[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
-  const [predictions, setPredictions] = useState<Record<string, Prediccion>>({});
+  const [healthStates, setHealthStates] = useState<Record<string, HealthDeviceState | null>>({});
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -68,22 +69,13 @@ export default function DashboardTecnicoPage() {
         setRepuestos(reps);
         setLastUpdated(new Date());
 
-        // Fetch predictions for related equipment
+        // Fetch health states for related equipment
         const activeDeviceIds = new Set([
           ...pend.items.map((i) => i.device_id),
           ...ejec.items.map((i) => i.device_id),
         ]);
-        const predResults = await Promise.allSettled(
-          [...activeDeviceIds].map((did) => fetchPredicciones(did, 1, 1)),
-        );
-        const preds: Record<string, Prediccion> = {};
-        [...activeDeviceIds].forEach((did, idx) => {
-          const r = predResults[idx];
-          if (r.status === 'fulfilled' && r.value.items.length > 0) {
-            preds[did] = r.value.items[0];
-          }
-        });
-        setPredictions(preds);
+        const health = await fetchHealthStates([...activeDeviceIds]);
+        setHealthStates(health);
       })
       .catch(() => {})
       .finally(() => { if (!silent) setLoading(false); });
@@ -225,7 +217,8 @@ export default function DashboardTecnicoPage() {
           ) : (
             <div className="space-y-3">
               {relatedEquipos.map((eq) => {
-                const pred = predictions[eq.device_id];
+                const health = healthStates[eq.device_id];
+                const hsp = health?.hours_since_prev;
                 const incCount = activeIncidencias.filter(
                   (i) => i.device_id === eq.device_id,
                 ).length;
@@ -240,24 +233,28 @@ export default function DashboardTecnicoPage() {
                         <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                           {eq.device_id}
                         </span>
-                        {pred && <RiskBadge level={pred.risk_level} />}
+                        {health?.health_state && (
+                          <HealthStateBadge state={health.health_state} size="sm" />
+                        )}
                       </div>
                       <p className="mt-0.5 text-xs text-zinc-500">
                         {eq.nombre ?? eq.tipo ?? 'Equipo de medicion'}
                       </p>
                     </div>
                     <div className="text-right">
-                      {pred ? (
-                        <>
-                          <div className="text-xs text-zinc-500">
-                            RUL: <span className="font-semibold text-zinc-900 dark:text-zinc-100">{pred.remaining_useful_life_days}d</span>
-                          </div>
-                          <div className="text-xs text-zinc-500">
-                            Falla: <span className="font-semibold text-zinc-900 dark:text-zinc-100">{Math.round(pred.failure_probability * 100)}%</span>
-                          </div>
-                        </>
+                      {health ? (
+                        <div className="text-xs text-zinc-500">
+                          Operando sin corte:{' '}
+                          <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                            {hsp != null
+                              ? hsp < 1
+                                ? `${Math.round(hsp * 60)} min`
+                                : `${hsp.toFixed(1)} h`
+                              : '—'}
+                          </span>
+                        </div>
                       ) : (
-                        <span className="text-xs text-zinc-400">Sin prediccion</span>
+                        <span className="text-xs text-zinc-400">Sin datos de salud</span>
                       )}
                       <div className="mt-1 text-xs text-zinc-400">
                         {incCount} incidencia{incCount > 1 ? 's' : ''}

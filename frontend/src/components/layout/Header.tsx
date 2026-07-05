@@ -126,8 +126,6 @@ function getNavForRole(rol: string) {
   const afterItems: NavItem[] = [];
   if (rol !== "tecnico") {
     afterItems.push({ label: "Lecturas", href: "/lecturas" });
-    afterItems.push({ label: "Predicciones", href: "/predicciones" });
-    afterItems.push({ label: "Alertas", href: "/alertas" });
   }
 
   const adminItems: NavItem[] = [];

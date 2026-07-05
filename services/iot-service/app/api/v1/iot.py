@@ -25,40 +25,7 @@ def _lectura_to_response(lectura: LecturaIoT) -> dict:
         "device_id": lectura.device_id,
         "equipo_device_id": lectura.equipo.device_id,
         "timestamp_lectura": lectura.timestamp_lectura,
-        "so2_ppb": float(lectura.so2_ppb) if lectura.so2_ppb is not None else None,
-        "h2s_ppb": float(lectura.h2s_ppb) if lectura.h2s_ppb is not None else None,
-        "reaction_temp": (
-            float(lectura.reaction_temp)
-            if lectura.reaction_temp is not None
-            else None
-        ),
-        "izs_temp": (
-            float(lectura.izs_temp) if lectura.izs_temp is not None else None
-        ),
-        "pmt_temp": (
-            float(lectura.pmt_temp) if lectura.pmt_temp is not None else None
-        ),
-        "sample_flow": (
-            float(lectura.sample_flow) if lectura.sample_flow is not None else None
-        ),
-        "pressure": (
-            float(lectura.pressure) if lectura.pressure is not None else None
-        ),
-        "uv_lamp_intensity": (
-            float(lectura.uv_lamp_intensity)
-            if lectura.uv_lamp_intensity is not None
-            else None
-        ),
-        "box_temp": (
-            float(lectura.box_temp) if lectura.box_temp is not None else None
-        ),
-        "hvps_v": float(lectura.hvps_v) if lectura.hvps_v is not None else None,
-        "conv_temp": (
-            float(lectura.conv_temp) if lectura.conv_temp is not None else None
-        ),
-        "ozone_flow": (
-            float(lectura.ozone_flow) if lectura.ozone_flow is not None else None
-        ),
+        "sensors": lectura.sensors or {},
         "procesado": lectura.procesado,
         "created_at": lectura.created_at,
     }

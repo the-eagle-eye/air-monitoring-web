@@ -20,6 +20,7 @@ def create_incidencia(db: Session, data: IncidenciaCreate) -> Incidencia:
         tipo=data.tipo,
         descripcion=data.descripcion,
         prioridad=data.prioridad,
+        origen=data.origen,
         responsable_id=data.responsable_id,
     )
     db.add(incidencia)
@@ -233,6 +234,106 @@ def create_alert_triggered_incidencia(
     )
 
     return incidencia
+
+
+# --- Regla de consolidacion de alertas del monitor de salud ---
+# docs/regla-consolidacion-alertas.md
+MONITOR_ORIGEN = "monitor_salud"
+_OPEN_STATES = ("pendiente", "en_ejecucion")
+# severidad del ensemble -> prioridad del incidente
+_SEVERITY_PRIORITY = {
+    "OBSERVADO": "baja",
+    "EN_RIESGO": "media",
+    "CRITICO": "alta",
+}
+_PRIORITY_RANK = {"baja": 1, "media": 2, "alta": 3}
+
+
+def create_or_escalate_monitor_incidencia(
+    db: Session, device_id: str, severidad: str, iot_service_url: str = "",
+) -> tuple[Incidencia | None, str]:
+    """Regla de consolidacion (docs/regla-consolidacion-alertas.md).
+
+    Un unico incidente correctivo abierto por equipo originado por el monitor.
+    - dedup por equipo: si ya hay uno abierto del monitor, no crea otro (CA-04).
+    - escalada: si la nueva severidad implica mayor prioridad, actualiza la
+      prioridad del incidente abierto; nunca la baja, nunca crea otro (CA-05).
+    - creacion: si no hay abierto del monitor, crea uno (CA-01/02/03). Como solo
+      mira los ABIERTOS, tras cerrar uno se puede crear otro nuevo (CA-06).
+    - una calibracion manual abierta NO bloquea (filtra origen+tipo) (CA-07).
+
+    Retorna (incidencia, accion) donde accion in {created, escalated, noop}.
+    """
+    prioridad = _SEVERITY_PRIORITY.get(severidad)
+    if prioridad is None:
+        return None, "noop"
+
+    abierta = (
+        db.query(Incidencia)
+        .filter(
+            Incidencia.device_id == device_id,
+            Incidencia.tipo == "correctiva",
+            Incidencia.origen == MONITOR_ORIGEN,
+            Incidencia.estado.in_(_OPEN_STATES),
+        )
+        .order_by(desc(Incidencia.created_at))
+        .first()
+    )
+
+    if abierta is not None:
+        # escalada: solo subir prioridad (CA-05), nunca bajar
+        if _PRIORITY_RANK[prioridad] > _PRIORITY_RANK[abierta.prioridad]:
+            prev = abierta.prioridad
+            abierta.prioridad = prioridad
+            abierta.updated_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(abierta)
+            logger.info(
+                "Incidencia monitor #%s escalada %s->%s (equipo %s)",
+                abierta.id, prev, prioridad, device_id,
+            )
+            if prioridad == "alta":
+                _notify_monitor_incidencia(db, abierta, iot_service_url)
+            return abierta, "escalated"
+        return abierta, "noop"
+
+    # creacion (CA-01/02/03/06)
+    coordinador = _get_coordinador(db)
+    incidencia = Incidencia(
+        device_id=device_id,
+        tipo="correctiva",
+        descripcion=(
+            f"Monitor de salud: anomalia {severidad} confirmada (ensemble AE+IF) "
+            f"para equipo {device_id}"
+        ),
+        prioridad=prioridad,
+        origen=MONITOR_ORIGEN,
+        responsable_id=coordinador.id if coordinador else None,
+    )
+    db.add(incidencia)
+    db.commit()
+    db.refresh(incidencia)
+    logger.info(
+        "Incidencia monitor #%s creada prioridad=%s (equipo %s, sev=%s)",
+        incidencia.id, prioridad, device_id, severidad,
+    )
+    _notify_monitor_incidencia(db, incidencia, iot_service_url)
+    return incidencia, "created"
+
+
+def _notify_monitor_incidencia(
+    db: Session, incidencia: Incidencia, iot_service_url: str
+) -> None:
+    """Notificacion email de incidencia del monitor (fire-and-forget)."""
+    try:
+        equipo_data = _fetch_equipo_data(iot_service_url, incidencia.device_id)
+        email_service.send_alerta_correctiva_notification(
+            db, equipo_data, incidencia.id
+        )
+    except Exception:
+        logger.exception(
+            "Error notificando incidencia monitor #%s", incidencia.id
+        )
 
 
 def evaluate_alerts(db: Session, ml_service_url: str) -> list[Incidencia]:

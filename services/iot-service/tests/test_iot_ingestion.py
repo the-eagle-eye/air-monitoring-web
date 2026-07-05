@@ -7,8 +7,10 @@ class TestPostReading:
         assert response.status_code == 200
         data = response.json()
         assert data["equipo_device_id"] == "T101"
-        assert data["so2_ppb"] == 25.43
-        assert data["h2s_ppb"] == 2.18
+        assert data["sensors"]["SO2_ppb"] == 25.43
+        assert data["sensors"]["H2S_ppb"] == 2.18
+        assert data["sensors"]["H2S_flow"] == 0.91
+        assert data["sensors"]["H2S_lamp_int"] == 76.5
         assert data["procesado"] is False
 
     def test_post_reading_unknown_equipo(self, client):
@@ -17,10 +19,14 @@ class TestPostReading:
         assert response.status_code == 404
         assert "no encontrado" in response.json()["detail"]
 
-    def test_post_reading_missing_field(self, client):
-        payload = {k: v for k, v in VALID_READING_PAYLOAD.items() if k != "SO2_ppb"}
+    def test_post_reading_accepts_any_extra_sensor(self, client):
+        # Any new sensor key must be accepted without 422
+        payload = {**VALID_READING_PAYLOAD, "CO2_ppm": 412.5, "cabinet_temp": 29.0}
         response = client.post("/api/v1/iot/readings", json=payload)
-        assert response.status_code == 422
+        assert response.status_code == 200
+        sensors = response.json()["sensors"]
+        assert sensors["CO2_ppm"] == 412.5
+        assert sensors["cabinet_temp"] == 29.0
 
     def test_post_reading_persisted(self, client):
         client.post("/api/v1/iot/readings", json=VALID_READING_PAYLOAD)
@@ -28,7 +34,7 @@ class TestPostReading:
         assert response.status_code == 200
         data = response.json()
         assert data["total"] == 1
-        assert data["items"][0]["so2_ppb"] == 25.43
+        assert data["items"][0]["sensors"]["SO2_ppb"] == 25.43
 
 
 class TestGetReadings:
@@ -59,7 +65,7 @@ class TestGetReadings:
         response = client.get("/api/v1/iot/readings/T101/latest")
         assert response.status_code == 200
         data = response.json()
-        assert "2025-10-27T19:00:00" in data["timestamp_lectura"]
+        assert "2025-10-28T00:00:00" in data["timestamp_lectura"]
         assert "raw_payload" in data
 
     def test_get_latest_no_readings(self, client):

@@ -19,6 +19,11 @@ class Incidencia(Base):
     prioridad: Mapped[str] = mapped_column(
         String, nullable=False, default="media"
     )
+    # origen del incidente: manual | monitor_salud | prediccion_rul
+    # permite el dedup selectivo de la regla de consolidacion (solo mira monitor_salud)
+    origen: Mapped[str] = mapped_column(
+        String, nullable=False, default="manual"
+    )
     responsable_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("usuarios.id"), nullable=True
     )

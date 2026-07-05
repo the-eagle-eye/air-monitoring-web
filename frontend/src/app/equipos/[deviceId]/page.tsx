@@ -7,15 +7,18 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { fetchEquipo, updateEquipo, fetchLecturas } from '@/lib/api/lecturas';
 import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
-import { fetchPredicciones, fetchAlertas } from '@/lib/api/predicciones';
+import { fetchHealthReadings } from '@/lib/api/healthMonitor';
+import ReconErrorChart from '@/components/dashboard/ReconErrorChart';
+import HealthStateBadge from '@/components/dashboard/HealthStateBadge';
+import { readSensor } from '@/lib/sensorFields';
 import EquipoForm from '@/components/equipos/EquipoForm';
 import DataTable from '@/components/ui/DataTable';
 import StatusBadge from '@/components/ui/StatusBadge';
 import Badge from '@/components/ui/Badge';
-import RiskBadge from '@/components/ui/RiskBadge';
 import type { Equipo, LecturaIoT } from '@/types/lectura';
 import type { Incidencia, CalibracionOps } from '@/types/ops';
-import type { Prediccion, Alerta } from '@/types/prediccion';
+import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
+import type { HealthReadingPoint } from '@/types/healthMonitor';
 
 // --------------- helpers ---------------
 
@@ -37,22 +40,6 @@ function formatTs(ts: string): string {
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-function rulColor(rul: number): string {
-  if (rul < 30) return 'text-red-500';
-  if (rul < 60) return 'text-yellow-500';
-  return 'text-green-500';
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - parseUTC(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 60) return `hace ${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `hace ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `hace ${days}d`;
-}
-
 const PRIORIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
   alta: 'danger',
   media: 'warning',
@@ -60,35 +47,6 @@ const PRIORIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
 };
 
 // --------------- mini charts ---------------
-
-const MiniPredictionChart = dynamic(
-  () =>
-    import('recharts').then((mod) => {
-      const { ComposedChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } = mod;
-
-      function Chart({ data }: { data: { timestamp: string; rul: number; failProb: number }[] }) {
-        const maxRul = Math.max(...data.map((d) => d.rul), 80);
-        return (
-          <ResponsiveContainer width="100%" height={250}>
-            <ComposedChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#a1a1aa40" />
-              <XAxis dataKey="timestamp" tick={{ fontSize: 10 }} stroke="#a1a1aa" />
-              <YAxis yAxisId="left" domain={[0, maxRul]} tick={{ fontSize: 10 }} stroke="#06b6d4" />
-              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontSize: 10 }} stroke="#ef4444" />
-              <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px', color: '#fafafa', fontSize: 12 }} />
-              <Legend />
-              <ReferenceLine yAxisId="left" y={30} stroke="#ef4444" strokeDasharray="6 3" />
-              <ReferenceLine yAxisId="left" y={60} stroke="#eab308" strokeDasharray="6 3" />
-              <Line yAxisId="left" type="monotone" dataKey="rul" name="RUL (dias)" stroke="#06b6d4" strokeWidth={2} dot={{ r: 3, fill: '#06b6d4' }} connectNulls />
-              <Line yAxisId="right" type="monotone" dataKey="failProb" name="Prob. Falla (%)" stroke="#ef4444" strokeWidth={2} dot={{ r: 3, fill: '#ef4444' }} connectNulls />
-            </ComposedChart>
-          </ResponsiveContainer>
-        );
-      }
-      return Chart;
-    }),
-  { ssr: false, loading: () => <div className="h-[250px]" /> },
-);
 
 const MiniSensorChart = dynamic(
   () =>
@@ -152,8 +110,8 @@ function EquipoDetail({ equipo }: { equipo: Equipo }) {
 
 const TABS = [
   { id: 'resumen', label: 'Resumen' },
+  { id: 'salud', label: 'Salud' },
   { id: 'lecturas', label: 'Lecturas' },
-  { id: 'alertas', label: 'Alertas' },
   { id: 'historial', label: 'Historial' },
 ] as const;
 
@@ -172,32 +130,31 @@ export default function EquipoDetailPage() {
   const [correctivos, setCorrectivos] = useState<Incidencia[]>([]);
   const [incCalibraciones, setIncCalibraciones] = useState<Incidencia[]>([]);
   const [calibraciones, setCalibraciones] = useState<CalibracionOps[]>([]);
-  const [predicciones, setPredicciones] = useState<Prediccion[]>([]);
   const [lecturas, setLecturas] = useState<LecturaIoT[]>([]);
-  const [alertas, setAlertas] = useState<Alerta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabId>('resumen');
+  const [healthPoints, setHealthPoints] = useState<HealthReadingPoint[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const loadAllData = useCallback((silent = false) => {
     if (!silent) setLoading(true);
+    // Salud predictiva (ensemble) — independiente, tolerante a 404/sin datos.
+    fetchHealthReadings(deviceId, 300)
+      .then((res) => setHealthPoints(res.points))
+      .catch(() => setHealthPoints([]));
     Promise.all([
       fetchEquipo(deviceId),
       fetchIncidencias({ device_id: deviceId, tipo: 'correctiva', page_size: 100 }),
       fetchIncidencias({ device_id: deviceId, tipo: 'calibracion', page_size: 100 }),
-      fetchPredicciones(deviceId, 1, 50),
       fetchLecturas(deviceId, 1, 100),
-      fetchAlertas({ device_id: deviceId, estado: 'activa', page_size: 50 }),
       fetchCalibracionesOps({ device_id: deviceId, page_size: 100 }),
     ])
-      .then(([eq, corr, cal, preds, lects, alts, calOps]) => {
+      .then(([eq, corr, cal, lects, calOps]) => {
         setEquipo(eq);
         setCorrectivos(corr.items);
         setIncCalibraciones(cal.items);
-        setPredicciones(preds.items);
         setLecturas(lects.items);
-        setAlertas(alts.items.filter((a) => a.nivel_riesgo === 'alta' || a.nivel_riesgo === 'media'));
         setCalibraciones(calOps.items);
         setLastUpdated(new Date());
       })
@@ -234,24 +191,18 @@ export default function EquipoDetailPage() {
     );
   }
 
-  const latest = predicciones.length > 0 ? predicciones[0] : null;
-
-  const predChartData = [...predicciones]
-    .sort((a, b) => parseUTC(a.prediction_timestamp).getTime() - parseUTC(b.prediction_timestamp).getTime())
-    .map((p) => ({
-      timestamp: formatTs(p.prediction_timestamp),
-      rul: p.remaining_useful_life_days,
-      failProb: Math.round(p.failure_probability * 100),
-    }));
+  const latestHealth = healthPoints.length > 0 ? healthPoints[healthPoints.length - 1] : null;
+  const healthConfig = latestHealth ? HEALTH_STATE_CONFIG[latestHealth.health_state] : null;
+  const anomalousReadings = healthPoints.filter((p) => p.and_alert).length;
 
   const sensorChartData = lecturas.map((l) => ({
     timestamp: formatTs(l.timestamp_lectura),
-    so2_ppb: l.so2_ppb,
-    h2s_ppb: l.h2s_ppb,
-    reaction_temp: l.reaction_temp,
-    box_temp: l.box_temp,
-    sample_flow: l.sample_flow,
-    uv_lamp_intensity: l.uv_lamp_intensity,
+    so2_ppb: readSensor(l, 'so2_ppb'),
+    h2s_ppb: readSensor(l, 'h2s_ppb'),
+    reaction_temp: readSensor(l, 'reaction_temp'),
+    box_temp: readSensor(l, 'box_temp'),
+    sample_flow: readSensor(l, 'sample_flow'),
+    uv_lamp_intensity: readSensor(l, 'uv_lamp_intensity'),
   }));
 
   // -- incidencias table columns --
@@ -408,11 +359,6 @@ export default function EquipoDetailPage() {
               }`}
             >
               {tab.label}
-              {tab.id === 'alertas' && alertas.length > 0 && (
-                <span className="ml-1.5 inline-flex h-5 w-5 items-center justify-center rounded-full bg-red-100 text-xs font-semibold text-red-700">
-                  {alertas.length}
-                </span>
-              )}
             </button>
           ))}
         </nav>
@@ -421,37 +367,34 @@ export default function EquipoDetailPage() {
       {/* Tab: Resumen */}
       {activeTab === 'resumen' && (
         <div className="space-y-6">
-          {/* Prediction summary */}
+          {/* Salud predictiva (ensemble no supervisado) */}
           <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
             <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              Prediccion Actual
+              Salud Predictiva
             </h2>
-            {!latest ? (
-              <p className="text-sm text-zinc-400">Sin predicciones disponibles</p>
+            {!latestHealth || !healthConfig ? (
+              <p className="text-sm text-zinc-400">Sin datos de salud disponibles</p>
             ) : (
-              <>
-                <div className="mb-4 grid grid-cols-3 gap-4">
-                  <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                    <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">RUL</dt>
-                    <dd className={`mt-1 text-2xl font-bold ${rulColor(latest.remaining_useful_life_days)}`}>
-                      {latest.remaining_useful_life_days} <span className="text-sm font-normal">dias</span>
-                    </dd>
-                  </div>
-                  <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                    <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Prob. Falla</dt>
-                    <dd className="mt-1 text-2xl font-bold text-red-500">
-                      {Math.round(latest.failure_probability * 100)}%
-                    </dd>
-                  </div>
-                  <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                    <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Nivel Riesgo</dt>
-                    <dd className="mt-2">
-                      <RiskBadge level={latest.risk_level as 'alta' | 'media' | 'baja'} />
-                    </dd>
-                  </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
+                  <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Estado</dt>
+                  <dd className="mt-2">
+                    <HealthStateBadge state={latestHealth.health_state} />
+                  </dd>
                 </div>
-                {predChartData.length > 0 && <MiniPredictionChart data={predChartData} />}
-              </>
+                <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
+                  <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Error recon.</dt>
+                  <dd className="mt-1 text-2xl font-bold" style={{ color: healthConfig.color }}>
+                    {latestHealth.recon_error != null ? latestHealth.recon_error.toFixed(3) : 'n/a'}
+                  </dd>
+                </div>
+                <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
+                  <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Umbral θ</dt>
+                  <dd className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
+                    {latestHealth.theta != null ? latestHealth.theta.toFixed(3) : 'n/a'}
+                  </dd>
+                </div>
+              </div>
             )}
           </div>
 
@@ -462,8 +405,8 @@ export default function EquipoDetailPage() {
               <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{lecturas.length}</p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Alertas</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{alertas.length}</p>
+              <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Lecturas anómalas</p>
+              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{anomalousReadings}</p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
               <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Correctivos</p>
@@ -474,6 +417,27 @@ export default function EquipoDetailPage() {
               <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{calibraciones.length}</p>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Tab: Salud (ensemble no supervisado) */}
+      {activeTab === 'salud' && (
+        <div className="space-y-4">
+          {healthPoints.length > 0 && (
+            <div className="flex items-center gap-3">
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                Estado actual:
+              </span>
+              <HealthStateBadge
+                state={healthPoints[healthPoints.length - 1].health_state}
+              />
+              <span className="text-xs text-zinc-400">
+                Detección de anomalías de salud por ensemble no supervisado
+                (Autoencoder + Isolation Forest).
+              </span>
+            </div>
+          )}
+          <ReconErrorChart points={healthPoints} />
         </div>
       )}
 
@@ -509,40 +473,6 @@ export default function EquipoDetailPage() {
                 </div>
               </div>
             </>
-          )}
-        </div>
-      )}
-
-      {/* Tab: Alertas */}
-      {activeTab === 'alertas' && (
-        <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-          <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-            Alertas del Equipo
-          </h2>
-          {alertas.length === 0 ? (
-            <p className="text-sm text-zinc-400">No hay alertas registradas</p>
-          ) : (
-            <div className="space-y-2">
-              {alertas.map((alerta) => (
-                <div
-                  key={alerta.id}
-                  className="flex items-center justify-between rounded-md border border-zinc-100 px-4 py-3 dark:border-zinc-800"
-                >
-                  <div className="flex items-center gap-3">
-                    <RiskBadge level={alerta.nivel_riesgo as 'alta' | 'media' | 'baja'} />
-                    <div>
-                      <p className="text-sm text-zinc-900 dark:text-zinc-100">
-                        {alerta.descripcion ?? `Alerta ${alerta.nivel_riesgo}`}
-                      </p>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                        {parseUTC(alerta.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-zinc-400">{timeAgo(alerta.created_at)}</span>
-                </div>
-              ))}
-            </div>
           )}
         </div>
       )}

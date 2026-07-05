@@ -1,20 +1,31 @@
 import { test, expect } from '@playwright/test';
 import { injectFakeAuth } from './helpers/auth';
-import { IOT, ML, GW, EMPTY_LIST } from './helpers/constants';
+import { IOT, GW, EMPTY_LIST } from './helpers/constants';
 
 const MOCK_EQUIPOS = [
   { device_id: 'T101', nombre: 'Analizador SO2 T101', tipo: 'SO2', ubicacion: 'Sala A', estado: 'activo' },
   { device_id: 'T102', nombre: 'Analizador H2S T102', tipo: 'H2S', ubicacion: 'Sala B', estado: 'activo' },
 ];
 
-const MOCK_PREDICTIONS_PAGE = {
-  items: [{ device_id: 'T101', failure_probability: 0.15, remaining_useful_life_days: 85, risk_level: 'baja' }],
-  total: 1,
+// Estado de salud del ensemble (modelo vigente). T101 sano, T102 en riesgo.
+const HEALTH_STATE: Record<string, object> = {
+  T101: {
+    device_id: 'T101', health_state: 'SANO', last_recon_error: 0.02, theta: 0.05,
+    hours_since_prev: 120, transmission_state: 'OK', transmission_severity: null,
+    last_reading_ts: new Date().toISOString(), updated_at: new Date().toISOString(),
+  },
+  T102: {
+    device_id: 'T102', health_state: 'EN_RIESGO', last_recon_error: 0.12, theta: 0.05,
+    hours_since_prev: 4, transmission_state: 'OK', transmission_severity: null,
+    last_reading_ts: new Date().toISOString(), updated_at: new Date().toISOString(),
+  },
 };
 
-const MOCK_ALERTAS = {
-  items: [{ id: 1, device_id: 'T102', nivel_riesgo: 'alta', descripcion: 'RUL critico', estado: 'activa', created_at: new Date().toISOString() }],
-  total: 1,
+const HEALTH_READINGS = {
+  device_id: 'T101',
+  points: [
+    { timestamp: new Date().toISOString(), recon_error: 0.02, theta: 0.05, health_state: 'SANO', and_alert: false },
+  ],
 };
 
 test.describe('Dashboard', () => {
@@ -24,11 +35,16 @@ test.describe('Dashboard', () => {
     await page.route(`${IOT}/api/v1/iot/equipos`, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_EQUIPOS) }),
     );
-    await page.route(`${ML}/api/v1/predictions/**`, (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_PREDICTIONS_PAGE) }),
-    );
-    await page.route(`${ML}/api/v1/alerts**`, (route) =>
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_ALERTAS) }),
+    // Monitor de salud (ensemble) — vía gateway. state por equipo y readings.
+    await page.route(`${GW}/api/v1/health-monitor/*/state`, (route) => {
+      const m = route.request().url().match(/health-monitor\/([^/]+)\/state/);
+      const id = m ? m[1] : 'T101';
+      const state = HEALTH_STATE[id];
+      if (!state) return route.fulfill({ status: 404, contentType: 'application/json', body: '{}' });
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(state) });
+    });
+    await page.route(`${GW}/api/v1/health-monitor/*/readings**`, (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(HEALTH_READINGS) }),
     );
     await page.route(`${GW}/api/v1/incidencias**`, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) }),
@@ -43,9 +59,15 @@ test.describe('Dashboard', () => {
     await page.goto('/dashboard');
   });
 
-  test('renders KPI cards with correct values', async ({ page }) => {
-    await expect(page.getByText(/Total Equipos/i).first()).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('2').first()).toBeVisible();
+  test('renders ensemble KPI cards', async ({ page }) => {
+    await expect(page.getByText(/Equipos monitoreados/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Equipos con anomal/i).first()).toBeVisible();
+    await expect(page.getByText(/Incidencias abiertas/i).first()).toBeVisible();
+    await expect(page.getByText(/Sin transmisi/i).first()).toBeVisible();
+  });
+
+  test('renders health semaforo (Salud Predictiva)', async ({ page }) => {
+    await expect(page.getByText(/Salud Predictiva/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('renders equipment grid with device cards', async ({ page }) => {
@@ -58,12 +80,26 @@ test.describe('Dashboard', () => {
     await expect(page.locator('a[href*="/equipos/T101"]').first()).toBeVisible();
   });
 
+  test('distribución de salud section is visible', async ({ page }) => {
+    await expect(page.getByText(/Distribuci.n de Salud/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('tendencia de anomalías section is visible', async ({ page }) => {
+    await expect(page.getByText(/Tendencia de Anomal/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
   test('incidencias summary section is visible', async ({ page }) => {
     await expect(page.getByText(/Incidencias/i).first()).toBeVisible({ timeout: 10_000 });
   });
 
   test('proximas calibraciones section is visible', async ({ page }) => {
     await expect(page.getByText(/Calibraciones/i).first()).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('nav does NOT show legacy Predicciones/Alertas items', async ({ page }) => {
+    await expect(page.getByText(/Equipos monitoreados/i).first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('link', { name: 'Predicciones' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'Alertas' })).toHaveCount(0);
   });
 
   test('header shows logged-in user and logout button', async ({ page }) => {

@@ -2,52 +2,81 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { usePolling } from '@/hooks/usePolling';
-import HealthSemaforo from '@/components/dashboard/HealthSemaforo';
+import SaludPredictivaSemaforo from '@/components/dashboard/SaludPredictivaSemaforo';
+import EquiposSinTransmision from '@/components/dashboard/EquiposSinTransmision';
 import KpiCards from '@/components/dashboard/KpiCards';
 import EquipoGrid from '@/components/dashboard/EquipoGrid';
 import RiskDistributionChart from '@/components/dashboard/RiskDistributionChart';
-import PredictionTrendsChart from '@/components/dashboard/PredictionTrendsChart';
+import AnomalyTrendsChart from '@/components/dashboard/AnomalyTrendsChart';
 import SensorTrendsChart from '@/components/dashboard/SensorTrendsChart';
-import RecentAlerts from '@/components/dashboard/RecentAlerts';
+import EquiposAtencion from '@/components/dashboard/EquiposAtencion';
 import IncidenciasSummary from '@/components/dashboard/IncidenciasSummary';
 import ProximasCalibraciones from '@/components/dashboard/ProximasCalibraciones';
 import { fetchDashboardData, fetchEquipoLecturas } from '@/lib/api/dashboard';
-import { fetchPredicciones } from '@/lib/api/predicciones';
 import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
+import { fetchHealthStates } from '@/lib/api/healthMonitor';
+import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
+import type { HealthDeviceState, HealthState } from '@/types/healthMonitor';
 import type { DashboardData, KpiData, RiskDistribution } from '@/types/dashboard';
 import type { LecturaIoT } from '@/types/lectura';
-import type { Prediccion } from '@/types/prediccion';
 import type { Incidencia, CalibracionOps } from '@/types/ops';
 
-function computeKpis(data: DashboardData): KpiData {
-  const predictions = Object.values(data.latestPredictions);
-  const alertasAltas = data.alertas.filter(
-    (a) => (a.nivel_riesgo === 'alta' || a.nivel_riesgo === 'media') && a.estado === 'activa',
+const ANOMALOUS: HealthState[] = ['OBSERVADO', 'EN_RIESGO', 'CRITICO'];
+const DIST_ORDER: HealthState[] = [
+  'SANO',
+  'OBSERVADO',
+  'EN_RIESGO',
+  'CRITICO',
+  'SIN_DATOS',
+];
+
+// KPIs del modelo ensemble (no supervisado): equipos monitoreados, equipos con
+// anomalía (observado/riesgo/crítico), incidencias abiertas y sin transmisión.
+function computeKpis(
+  data: DashboardData,
+  healthStates: Record<string, HealthDeviceState | null>,
+  openIncidencias: Incidencia[],
+): KpiData {
+  const states = Object.values(healthStates).filter(
+    (s): s is HealthDeviceState => s !== null,
+  );
+  const anomalias24h = states.filter((s) =>
+    ANOMALOUS.includes(s.health_state),
   ).length;
-  const rulValues = predictions.map((p) => p.remaining_useful_life_days);
-  const rulPromedio =
-    rulValues.length > 0
-      ? Math.round(rulValues.reduce((a, b) => a + b, 0) / rulValues.length)
-      : 0;
+  const sinTransmision = states.filter(
+    (s) =>
+      s.health_state === 'SIN_DATOS' ||
+      s.transmission_state === 'SIN_TRANSMISION',
+  ).length;
 
   return {
     totalEquipos: data.equipos.length,
-    alertasAltas,
-    rulPromedio,
-    prediccionesRecientes: predictions.length,
+    anomalias24h,
+    incidenciasAbiertas: openIncidencias.length,
+    sinTransmision,
   };
 }
 
-function computeRiskDistribution(data: DashboardData): RiskDistribution[] {
-  const counts = { alta: 0, media: 0, baja: 0 };
-  Object.values(data.latestPredictions).forEach((p) => {
-    counts[p.risk_level] = (counts[p.risk_level] ?? 0) + 1;
+// Distribución por estado de salud del ensemble (reemplaza la distribución por
+// risk_level del RF).
+function computeHealthDistribution(
+  healthStates: Record<string, HealthDeviceState | null>,
+): RiskDistribution[] {
+  const counts: Record<HealthState, number> = {
+    SANO: 0,
+    OBSERVADO: 0,
+    EN_RIESGO: 0,
+    CRITICO: 0,
+    SIN_DATOS: 0,
+  };
+  Object.values(healthStates).forEach((s) => {
+    if (s) counts[s.health_state] = (counts[s.health_state] ?? 0) + 1;
   });
-  return [
-    { name: 'Alta', value: counts.alta, color: '#ef4444' },
-    { name: 'Media', value: counts.media, color: '#eab308' },
-    { name: 'Baja', value: counts.baja, color: '#22c55e' },
-  ];
+  return DIST_ORDER.map((st) => ({
+    name: HEALTH_STATE_CONFIG[st].label,
+    value: counts[st],
+    color: HEALTH_STATE_CONFIG[st].color,
+  }));
 }
 
 export default function DashboardPage() {
@@ -58,10 +87,9 @@ export default function DashboardPage() {
   const [selectedEquipo, setSelectedEquipo] = useState('');
   const [lecturas, setLecturas] = useState<LecturaIoT[]>([]);
   const [lecturasLoading, setLecturasLoading] = useState(false);
-  const [predicciones, setPredicciones] = useState<Prediccion[]>([]);
-  const [prediccionesLoading, setPrediccionesLoading] = useState(false);
   const [openIncidencias, setOpenIncidencias] = useState<Incidencia[]>([]);
   const [pendingCalibraciones, setPendingCalibraciones] = useState<CalibracionOps[]>([]);
+  const [healthStates, setHealthStates] = useState<Record<string, HealthDeviceState | null>>({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const selectedEquipoRef = useRef(selectedEquipo);
@@ -76,6 +104,10 @@ export default function DashboardPage() {
           setSelectedEquipo(data.equipos[0].device_id);
         }
         setLastUpdated(new Date());
+        // Salud predictiva (ensemble) por equipo — tolerante a fallos por equipo.
+        fetchHealthStates(data.equipos.map((e) => e.device_id))
+          .then(setHealthStates)
+          .catch(() => {});
       })
       .catch((err) => { if (!silent) setError(err.message); })
       .finally(() => { if (!silent) setLoading(false); });
@@ -100,12 +132,6 @@ export default function DashboardPage() {
       .then(setLecturas)
       .catch(() => setLecturas([]))
       .finally(() => { if (!silent) setLecturasLoading(false); });
-
-    if (!silent) setPrediccionesLoading(true);
-    fetchPredicciones(equipo, 1, 200)
-      .then((res) => setPredicciones(res.items))
-      .catch(() => setPredicciones([]))
-      .finally(() => { if (!silent) setPrediccionesLoading(false); });
   }, []);
 
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
@@ -113,7 +139,6 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!selectedEquipo) {
       setLecturas([]);
-      setPredicciones([]);
       return;
     }
     loadEquipoData();
@@ -143,8 +168,8 @@ export default function DashboardPage() {
 
   if (!dashData) return null;
 
-  const kpis = computeKpis(dashData);
-  const riskDist = computeRiskDistribution(dashData);
+  const kpis = computeKpis(dashData, healthStates, openIncidencias);
+  const healthDist = computeHealthDistribution(healthStates);
   const equipoOptions = dashData.equipos.map((eq) => ({
     device_id: eq.device_id,
     label: `${eq.device_id}${eq.nombre ? ` - ${eq.nombre}` : ''}`,
@@ -163,22 +188,23 @@ export default function DashboardPage() {
         )}
       </div>
 
-      <HealthSemaforo
-        predictions={dashData.latestPredictions}
-        totalEquipos={dashData.equipos.length}
-        incidenciasAbiertas={openIncidencias}
-      />
+      {/* Semáforo único: Salud Predictiva (ensemble AE+IF+AND). El modelo RF
+          (RUL, predicciones, alertas) se retiró — el sistema es el ensemble. */}
+      <SaludPredictivaSemaforo states={healthStates} />
+
+      <EquiposSinTransmision states={healthStates} />
 
       <KpiCards data={kpis} />
 
       <EquipoGrid
         equipos={dashData.equipos}
-        predictions={dashData.latestPredictions}
+        healthStates={healthStates}
+        openIncidencias={openIncidencias}
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <RiskDistributionChart data={riskDist} />
-        <RecentAlerts alertas={dashData.alertas} />
+        <RiskDistributionChart data={healthDist} />
+        <EquiposAtencion states={healthStates} />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -186,9 +212,7 @@ export default function DashboardPage() {
         <ProximasCalibraciones calibraciones={pendingCalibraciones} />
       </div>
 
-      <PredictionTrendsChart
-        predicciones={predicciones}
-        loading={prediccionesLoading}
+      <AnomalyTrendsChart
         selectedEquipo={selectedEquipo}
         equipoOptions={equipoOptions}
         onEquipoChange={setSelectedEquipo}

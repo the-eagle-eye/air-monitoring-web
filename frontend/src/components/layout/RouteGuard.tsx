@@ -8,12 +8,12 @@ import { useAuth } from '@/lib/auth';
 const ROLE_ROUTES: Record<string, string[]> = {
   administrador: [
     '/', '/dashboard', '/equipos', '/incidencias', '/calibraciones',
-    '/lecturas', '/predicciones', '/alertas',
+    '/lecturas',
     '/repuestos', '/proveedores', '/usuarios', '/reportes',
   ],
   coordinador: [
     '/', '/dashboard', '/equipos', '/incidencias', '/calibraciones',
-    '/lecturas', '/predicciones', '/alertas', '/reportes',
+    '/lecturas', '/reportes',
   ],
   tecnico: [
     '/', '/dashboard-tecnico', '/equipos', '/incidencias', '/repuestos',

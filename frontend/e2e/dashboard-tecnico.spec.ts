@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { injectFakeAuth } from './helpers/auth';
-import { IOT, GW, ML, EMPTY_LIST } from './helpers/constants';
+import { IOT, GW, EMPTY_LIST } from './helpers/constants';
 
 const MOCK_INCIDENCIAS_PENDIENTES = {
   items: [
@@ -42,11 +42,17 @@ test.describe('Dashboard Tecnico', () => {
     await page.route(`${GW}/api/v1/repuestos`, (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) }),
     );
-    await page.route(`${ML}/api/v1/predictions/**`, (route) =>
+    // Salud del ensemble (modelo vigente) — reemplaza el mock de predicciones RF.
+    await page.route(`${GW}/api/v1/health-monitor/*/state`, (route) =>
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ items: [{ device_id: 'T103', failure_probability: 0.2, remaining_useful_life_days: 45, risk_level: 'media' }], total: 1 }),
+        body: JSON.stringify({
+          device_id: 'T103', health_state: 'EN_RIESGO', last_recon_error: 0.12,
+          theta: 0.05, hours_since_prev: 6, transmission_state: 'OK',
+          transmission_severity: null, last_reading_ts: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }),
       }),
     );
 

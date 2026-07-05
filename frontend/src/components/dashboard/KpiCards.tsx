@@ -4,34 +4,32 @@ interface KpiCardsProps {
   data: KpiData;
 }
 
+// KPIs del modelo ensemble (AE+IF+AND). Las antiguas KPIs RF (Alertas Activas,
+// RUL Promedio, Predicciones) se retiraron al migrar del Random Forest.
 const cards = [
   {
     key: 'totalEquipos' as const,
-    label: 'Total Equipos',
+    label: 'Equipos monitoreados',
     accent: 'text-blue-600',
     bg: 'bg-blue-50 dark:bg-blue-950',
-    format: (v: number) => String(v),
   },
   {
-    key: 'alertasAltas' as const,
-    label: 'Alertas Activas',
+    key: 'anomalias24h' as const,
+    label: 'Equipos con anomalía',
+    accent: 'text-orange-600',
+    bg: 'bg-orange-50 dark:bg-orange-950',
+  },
+  {
+    key: 'incidenciasAbiertas' as const,
+    label: 'Incidencias abiertas',
     accent: 'text-red-600',
     bg: 'bg-red-50 dark:bg-red-950',
-    format: (v: number) => String(v),
   },
   {
-    key: 'rulPromedio' as const,
-    label: 'RUL Promedio',
-    accent: 'text-yellow-600',
-    bg: 'bg-yellow-50 dark:bg-yellow-950',
-    format: (v: number) => `${v} dias`,
-  },
-  {
-    key: 'prediccionesRecientes' as const,
-    label: 'Predicciones',
-    accent: 'text-green-600',
-    bg: 'bg-green-50 dark:bg-green-950',
-    format: (v: number) => String(v),
+    key: 'sinTransmision' as const,
+    label: 'Sin transmisión',
+    accent: 'text-zinc-500',
+    bg: 'bg-zinc-100 dark:bg-zinc-900',
   },
 ];
 
@@ -47,7 +45,7 @@ export default function KpiCards({ data }: KpiCardsProps) {
             {card.label}
           </p>
           <p className={`mt-1 text-2xl font-bold ${card.accent}`}>
-            {card.format(data[card.key])}
+            {data[card.key]}
           </p>
         </div>
       ))}

@@ -1,6 +1,7 @@
 'use client';
 
 import DataTable from '@/components/ui/DataTable';
+import { readSensor } from '@/lib/sensorFields';
 import type { LecturaIoT } from '@/types/lectura';
 
 interface LecturasTableProps {
@@ -41,8 +42,7 @@ export default function LecturasTable({ lecturas }: LecturasTableProps) {
     },
     ...SENSOR_COLUMNS.map((col) => ({
       ...col,
-      render: (item: LecturaIoT) =>
-        formatValue(item[col.key as keyof LecturaIoT] as number | null),
+      render: (item: LecturaIoT) => formatValue(readSensor(item, col.key)),
     })),
   ];
 

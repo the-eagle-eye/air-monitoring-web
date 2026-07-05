@@ -146,3 +146,104 @@ class TestIncidencias:
             "diagnostico": "Duplicado",
         })
         assert resp.status_code == 409
+
+
+class TestConsolidacionMonitorSalud:
+    """Regla de consolidacion de alertas del monitor de salud (CA-01..CA-08).
+    docs/regla-consolidacion-alertas.md"""
+
+    def _monitor_alert(self, client, device_id, severidad):
+        return client.post("/api/v1/incidencias/monitor-alert", json={
+            "device_id": device_id, "severidad": severidad,
+        })
+
+    def _open_monitor_incidencias(self, client, device_id):
+        resp = client.get(f"/api/v1/incidencias?device_id={device_id}")
+        return [
+            i for i in resp.json()["items"]
+            if i["origen"] == "monitor_salud"
+            and i["estado"] in ("pendiente", "en_ejecucion")
+        ]
+
+    # CA-01/02/03 — creacion por nivel
+    def test_ca01_observado_crea_prioridad_baja(self, client):
+        resp = self._monitor_alert(client, "CA-CH-04", "OBSERVADO")
+        assert resp.status_code == 201
+        data = resp.json()
+        assert data["accion"] == "created"
+        assert data["incidencia"]["prioridad"] == "baja"
+        assert data["incidencia"]["tipo"] == "correctiva"
+        assert data["incidencia"]["origen"] == "monitor_salud"
+
+    def test_ca02_en_riesgo_crea_prioridad_media(self, client):
+        resp = self._monitor_alert(client, "CA-CH-05", "EN_RIESGO")
+        assert resp.status_code == 201
+        assert resp.json()["incidencia"]["prioridad"] == "media"
+
+    def test_ca03_critico_crea_prioridad_alta(self, client):
+        resp = self._monitor_alert(client, "CA-ILO-01", "CRITICO")
+        assert resp.status_code == 201
+        assert resp.json()["incidencia"]["prioridad"] == "alta"
+
+    # CA-04 — dedup: no crea segundo incidente si ya hay uno abierto
+    def test_ca04_dedup_no_crea_segundo(self, client):
+        self._monitor_alert(client, "CA-CH-04", "OBSERVADO")
+        resp = self._monitor_alert(client, "CA-CH-04", "OBSERVADO")
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "noop"
+        assert len(self._open_monitor_incidencias(client, "CA-CH-04")) == 1
+
+    # CA-05 — escalada: sube prioridad, no crea otro; nunca baja
+    def test_ca05_escalada_sube_prioridad(self, client):
+        self._monitor_alert(client, "CA-CH-04", "OBSERVADO")  # baja
+        resp = self._monitor_alert(client, "CA-CH-04", "CRITICO")  # -> alta
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "escalated"
+        assert resp.json()["incidencia"]["prioridad"] == "alta"
+        assert len(self._open_monitor_incidencias(client, "CA-CH-04")) == 1
+
+    def test_ca05_no_baja_prioridad(self, client):
+        self._monitor_alert(client, "CA-CH-04", "CRITICO")  # alta
+        resp = self._monitor_alert(client, "CA-CH-04", "OBSERVADO")  # sigue alta
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "noop"
+        abiertas = self._open_monitor_incidencias(client, "CA-CH-04")
+        assert abiertas[0]["prioridad"] == "alta"
+
+    # CA-06 — reapertura: tras cerrar, puede crear otro nuevo
+    def test_ca06_reapertura_tras_cierre(self, client):
+        r1 = self._monitor_alert(client, "CA-CH-04", "EN_RIESGO")
+        inc_id = r1.json()["incidencia"]["id"]
+        # cerrar
+        client.put(f"/api/v1/incidencias/{inc_id}", json={"estado": "cancelado"})
+        # nueva anomalia -> nuevo incidente
+        r2 = self._monitor_alert(client, "CA-CH-04", "EN_RIESGO")
+        assert r2.status_code == 201
+        assert r2.json()["accion"] == "created"
+        assert r2.json()["incidencia"]["id"] != inc_id
+
+    # CA-07 — calibracion manual abierta no bloquea
+    def test_ca07_calibracion_manual_no_bloquea(self, client):
+        client.post("/api/v1/incidencias", json={
+            "device_id": "CA-UCHU-01", "tipo": "calibracion",
+            "origen": "manual",
+        })
+        resp = self._monitor_alert(client, "CA-UCHU-01", "EN_RIESGO")
+        assert resp.status_code == 201
+        assert resp.json()["accion"] == "created"
+
+    def test_ca07_correctiva_manual_no_bloquea(self, client):
+        # una correctiva manual (no del monitor) tampoco bloquea al monitor
+        client.post("/api/v1/incidencias", json={
+            "device_id": "CA-UCHU-01", "tipo": "correctiva", "origen": "manual",
+        })
+        resp = self._monitor_alert(client, "CA-UCHU-01", "OBSERVADO")
+        assert resp.status_code == 201
+        assert resp.json()["accion"] == "created"
+
+    # CA-08 — verifica que la severidad invalida no crea nada
+    def test_severidad_invalida_noop(self, client):
+        resp = self._monitor_alert(client, "CA-CH-04", "SANO")
+        assert resp.status_code == 200
+        assert resp.json()["accion"] == "noop"
+        assert len(self._open_monitor_incidencias(client, "CA-CH-04")) == 0

@@ -26,6 +26,11 @@ class AlertTriggerRequest(BaseModel):
     device_id: str
     nivel_riesgo: str = "alta"
 
+
+class MonitorAlertRequest(BaseModel):
+    device_id: str
+    severidad: str  # OBSERVADO | EN_RIESGO | CRITICO
+
 router = APIRouter()
 
 
@@ -150,6 +155,34 @@ def submit_mantenimiento(
 def evaluar_alertas(db: Session = Depends(get_db)):
     created = incidencia_service.evaluate_alerts(db, settings.ML_SERVICE_URL)
     return [IncidenciaResponse.model_validate(i) for i in created]
+
+
+@router.post("/monitor-alert")
+def monitor_alert(data: MonitorAlertRequest, db: Session = Depends(get_db)):
+    """Regla de consolidacion del monitor de salud (docs/regla-consolidacion-alertas.md).
+
+    Un unico incidente correctivo abierto por equipo (origen=monitor_salud):
+    crea, escala prioridad o no hace nada segun la severidad recibida.
+    """
+    incidencia, accion = incidencia_service.create_or_escalate_monitor_incidencia(
+        db, data.device_id, data.severidad, settings.IOT_SERVICE_URL
+    )
+    if accion == "created":
+        return JSONResponse(
+            status_code=201,
+            content={"accion": accion,
+                     "incidencia": IncidenciaResponse.model_validate(
+                         incidencia).model_dump(mode="json")},
+        )
+    if accion == "escalated":
+        return JSONResponse(
+            status_code=200,
+            content={"accion": accion,
+                     "incidencia": IncidenciaResponse.model_validate(
+                         incidencia).model_dump(mode="json")},
+        )
+    # noop: severidad no anomala, o ya existe abierto sin escalada
+    return JSONResponse(status_code=200, content={"accion": "noop"})
 
 
 @router.post("/alert-trigger", response_model=IncidenciaResponse, status_code=201)

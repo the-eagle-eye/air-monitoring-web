@@ -1,10 +1,8 @@
 import logging
 
-import httpx
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
-from app.config import settings
 from app.models.alerta import Alerta
 from app.models.prediccion import Prediccion
 
@@ -41,26 +39,26 @@ def evaluate_and_create_alert(db: Session, prediccion: Prediccion) -> Alerta:
     db.commit()
     db.refresh(alerta)
 
-    if alerta.nivel_riesgo in ("alta", "media"):
-        _notify_ops_alert(prediccion.device_id, alerta.nivel_riesgo)
+    # DEPRECADO (retiro del RF): la creación de incidencias correctivas la hace
+    # ahora EXCLUSIVAMENTE el monitor de salud (ensemble) vía la regla de
+    # consolidación (ops /incidencias/monitor-alert). El flujo RF ya no dispara
+    # incidencias para no duplicar. Ver docs/spec-racionalizacion-dashboard-e-incidencias.md
+    # (Decisión B1 + C1). La Alerta se persiste solo por compatibilidad histórica.
 
     return alerta
 
 
 def _notify_ops_alert(device_id: str, nivel_riesgo: str = "alta") -> None:
-    """Notificar a ops-service para crear incidencia correctiva (fire-and-forget)."""
-    try:
-        resp = httpx.post(
-            f"{settings.OPS_SERVICE_URL}/api/v1/incidencias/alert-trigger",
-            json={"device_id": device_id, "nivel_riesgo": nivel_riesgo},
-            timeout=10.0,
-        )
-        resp.raise_for_status()
-        logger.info("ops-service notificado de alerta %s para %s", nivel_riesgo, device_id)
-    except Exception:
-        logger.exception(
-            "Error notificando a ops-service de alerta %s para %s", nivel_riesgo, device_id
-        )
+    """DEPRECADO — el RF ya no crea incidencias (lo hace el monitor de salud).
+
+    Se conserva la función como no-op para no romper referencias externas.
+    Ver docs/spec-racionalizacion-dashboard-e-incidencias.md.
+    """
+    logger.warning(
+        "_notify_ops_alert está deprecado (retiro RF); no se creó incidencia "
+        "para %s (nivel %s). Las incidencias las crea el monitor de salud.",
+        device_id, nivel_riesgo,
+    )
 
 
 def get_alerts(

@@ -1,0 +1,8 @@
+{
+  "station_id": "CA-CH-05",
+  "theta": 0.20656736487711697,
+  "theta_train": 0.9819022671274952,
+  "theta_recalibrated": 0.20656736487711697,
+  "theta_source": "recalibrated_warmup",
+  "theta_percentile": 95
+}
