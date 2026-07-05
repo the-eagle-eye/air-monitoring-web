@@ -122,6 +122,7 @@ function getNavForRole(rol: string) {
     opsItems.push({ label: "Reportes", href: "/reportes" });
   } else if (rol === "tecnico") {
     opsItems.push({ label: "Incidencias", href: "/incidencias" });
+    opsItems.push({ label: "Calibraciones", href: "/calibraciones" });
   }
 
   const afterItems: NavItem[] = [];

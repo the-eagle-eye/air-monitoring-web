@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc
 
 from app.models.calibracion import Calibracion
+from app.models.incidencia import Incidencia
 from app.schemas.calibracion import CalibracionCreate, CalibracionUpdate
 
 
@@ -36,11 +37,18 @@ def list_calibraciones(
     device_id: str | None = None,
     page: int = 1,
     page_size: int = 50,
+    responsable_id: int | None = None,
 ) -> tuple[list[Calibracion], int]:
     query = db.query(Calibracion).options(joinedload(Calibracion.incidencia))
 
     if device_id:
         query = query.filter(Calibracion.device_id == device_id)
+
+    # El técnico solo ve las calibraciones de SUS incidencias asignadas.
+    if responsable_id is not None:
+        query = query.join(
+            Incidencia, Calibracion.incidencia_id == Incidencia.id
+        ).filter(Incidencia.responsable_id == responsable_id)
 
     query = query.order_by(desc(Calibracion.created_at))
     total = query.count()

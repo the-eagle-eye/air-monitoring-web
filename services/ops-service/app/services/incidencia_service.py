@@ -136,6 +136,17 @@ def update_incidencia(
     for field, value in update_fields.items():
         setattr(incidencia, field, value)
 
+    # ITIL: al ASIGNAR un responsable a una incidencia 'pendiente' (sin cambiar
+    # estado explícitamente), avanza automáticamente a 'en_ejecucion'. Así el
+    # coordinador solo asigna y el estado sigue el flujo, sin dropdown manual.
+    if (
+        update_fields.get("responsable_id")
+        and not new_state
+        and incidencia.estado == "pendiente"
+    ):
+        incidencia.estado = "en_ejecucion"
+        _seal_sla_timestamps(incidencia, "en_ejecucion", now)
+
     # ITIL I2.4: si cambió impacto o urgencia, re-derivar prioridad
     if "impacto" in update_fields or "urgencia" in update_fields:
         incidencia.prioridad = priority_service.derive_priority(
@@ -212,7 +223,12 @@ def _auto_create_calibracion(
     db: Session, correctiva: Incidencia, iot_service_url: str = ""
 ) -> Incidencia:
     """Crear incidencia de calibracion cuando una correctiva finaliza."""
+    # La calibración HEREDA el responsable de la correctiva (el técnico que hizo
+    # el mantenimiento) para que aparezca en "sus" calibraciones y la complete.
+    # Fallback al coordinador si la correctiva no tenía responsable.
     coordinador = _get_coordinador(db)
+    responsable_id = correctiva.responsable_id or (
+        coordinador.id if coordinador else None)
 
     cal_incidencia = Incidencia(
         device_id=correctiva.device_id,
@@ -222,7 +238,7 @@ def _auto_create_calibracion(
             f"(incidencia #{correctiva.id})"
         ),
         prioridad="alta",
-        responsable_id=coordinador.id if coordinador else None,
+        responsable_id=responsable_id,
     )
     db.add(cal_incidencia)
     db.commit()

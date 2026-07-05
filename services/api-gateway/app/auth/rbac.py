@@ -35,11 +35,20 @@ WRITE_RESTRICTED = {
     "/api/v1/equipos": {"administrador"},
 }
 
-# Tecnico can submit mantenimiento on assigned incidencias
+# Excepciones de escritura por ruta específica (más permisivas que WRITE_RESTRICTED).
+# `methods` opcional: si se define, la excepción solo aplica a esos métodos.
 WRITE_EXCEPTIONS = [
     {
         "pattern": "/api/v1/incidencias/",
         "suffix": "/mantenimiento",
+        "roles": {"tecnico", "coordinador", "administrador"},
+    },
+    # El técnico puede COMPLETAR (PUT) calibraciones de sus incidencias asignadas,
+    # pero NO crear (POST) — eso queda para coordinador/admin.
+    {
+        "pattern": "/api/v1/calibraciones/",
+        "suffix": "",
+        "methods": {"PUT"},
         "roles": {"tecnico", "coordinador", "administrador"},
     },
 ]
@@ -72,8 +81,12 @@ def check_write_permission(path: str, method: str, user_rol: str) -> bool:
         return True
     # Check specific route exceptions first
     for exc in WRITE_EXCEPTIONS:
-        if path.startswith(exc["pattern"]) and path.endswith(exc["suffix"]):
-            return user_rol in exc["roles"]
+        if not (path.startswith(exc["pattern"]) and path.endswith(exc["suffix"])):
+            continue
+        # si la excepción restringe métodos, respetarlo
+        if "methods" in exc and method not in exc["methods"]:
+            continue
+        return user_rol in exc["roles"]
     for prefix, allowed_roles in WRITE_RESTRICTED.items():
         if path.startswith(prefix):
             return user_rol in allowed_roles

@@ -1,8 +1,9 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useAuth } from '@/lib/auth';
 import {
   fetchIncidencia,
   updateIncidencia,
@@ -16,23 +17,6 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Badge from '@/components/ui/Badge';
 import type { Incidencia, Usuario, Repuesto, Problema } from '@/types/ops';
 
-// ITIL: transiciones de estado válidas (coincide con el backend VALID_TRANSITIONS)
-const VALID_TRANSITIONS: Record<string, string[]> = {
-  pendiente: ['en_ejecucion', 'cancelado'],
-  en_ejecucion: ['resuelto', 'cancelado'],
-  resuelto: ['finalizado', 'cancelado'],
-  finalizado: [],
-  cancelado: [],
-};
-
-const ESTADO_LABEL: Record<string, string> = {
-  pendiente: 'Pendiente',
-  en_ejecucion: 'En Ejecución',
-  resuelto: 'Resuelto',
-  finalizado: 'Finalizado',
-  cancelado: 'Cancelado',
-};
-
 function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
@@ -45,9 +29,7 @@ function fmtDate(iso: string | null | undefined): string {
 export default function IncidenciaDetailPage() {
   const params = useParams();
   const router = useRouter();
-  const searchParams = useSearchParams();
   const id = Number(params.id);
-  const requestedMode = searchParams.get('mode');
 
   const [incidencia, setIncidencia] = useState<Incidencia | null>(null);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -57,7 +39,6 @@ export default function IncidenciaDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   // Edit state
-  const [editEstado, setEditEstado] = useState('');
   const [editResponsable, setEditResponsable] = useState('');
 
   // Mantenimiento form
@@ -78,7 +59,6 @@ export default function IncidenciaDetailPage() {
     Promise.all([fetchIncidencia(id), fetchUsuarios(), fetchRepuestos()])
       .then(([inc, users, reps]) => {
         setIncidencia(inc);
-        setEditEstado(inc.estado);
         setEditResponsable(inc.responsable_id ? String(inc.responsable_id) : '');
         setUsuarios(users);
         setRepuestos(reps);
@@ -105,67 +85,115 @@ export default function IncidenciaDetailPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Determine mode
-  const isFinalizado = incidencia?.estado === 'finalizado' || incidencia?.estado === 'cancelado';
-  const isEditMode = requestedMode === 'edit' && !isFinalizado;
+  // Rol del usuario (flujo ITIL por rol)
+  const { user } = useAuth();
+  const rol = user?.rol ?? '';
+  const isCoordinador = rol === 'coordinador' || rol === 'administrador';
+  const isTecnico = rol === 'tecnico';
+
+  // Estado del ciclo de vida
+  const estado = incidencia?.estado ?? '';
+  const isCerrada = estado === 'finalizado' || estado === 'cancelado';
   const hasMantenimiento = !!incidencia?.mantenimiento_correctivo;
 
-  async function handleSave() {
-    if (!incidencia) return;
+  // Acciones disponibles por rol y estado (ITIL — estado avanza por acción):
+  //  - Coordinador ASIGNA (pendiente) -> en_ejecucion
+  //  - Técnico completa MANTENIMIENTO (en_ejecucion) -> resuelto
+  //  - Coordinador VERIFICA Y CIERRA (resuelto) -> finalizado (+ calibración)
+  const canAsignar = isCoordinador && estado === 'pendiente';
+  const canRegistrarMantenimiento =
+    isTecnico && !hasMantenimiento && (estado === 'en_ejecucion' || estado === 'pendiente');
+  const canCerrar = isCoordinador && estado === 'resuelto';
+  const canCancelar = isCoordinador && !isCerrada;
 
-    // Validate responsable
+  // Coordinador: asignar responsable (auto -> en_ejecucion en el backend)
+  async function handleAsignar() {
+    if (!incidencia) return;
     if (!editResponsable) {
-      setSaveMsg({ text: 'Responsable es obligatorio', isError: true });
+      setSaveMsg({ text: 'Selecciona un responsable', isError: true });
       return;
     }
-
-    // Validate mantenimiento fields if no existing mantenimiento
-    if (!hasMantenimiento) {
-      if (!mtoDiagnostico.trim() || !mtoAcciones.trim() || !mtoConclusion.trim()) {
-        setSaveMsg({ text: 'Diagnostico, Acciones Realizadas y Conclusion son obligatorios', isError: true });
-        return;
-      }
-    }
-
     setSaving(true);
     setSaveMsg(null);
-
     try {
-      // 1. Update incidencia (estado + responsable)
-      const updated = await updateIncidencia(id, {
-        estado: editEstado !== incidencia.estado ? editEstado : undefined,
-        responsable_id: editResponsable ? Number(editResponsable) : undefined,
-      });
-
-      // 2. Submit mantenimiento if not already exists
-      if (!hasMantenimiento) {
-        await submitMantenimiento(id, {
-          diagnostico: mtoDiagnostico,
-          acciones_realizadas: mtoAcciones,
-          conclusion: mtoConclusion,
-          fecha_ejecucion: new Date().toISOString(),
-          repuesto_ids: selectedRepuestoIds,
-          adjuntos: adjuntos.filter((a) => a.filename && a.file_url),
-        });
-      }
-
-      // Refresh data
-      const refreshed = await fetchIncidencia(id);
-      setIncidencia(refreshed);
-      setEditEstado(refreshed.estado);
-      setEditResponsable(refreshed.responsable_id ? String(refreshed.responsable_id) : '');
-      if (refreshed.mantenimiento_correctivo) {
-        setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
-        setMtoAcciones(refreshed.mantenimiento_correctivo.acciones_realizadas ?? '');
-        setMtoConclusion(refreshed.mantenimiento_correctivo.conclusion ?? '');
-      }
-
-      setSaveMsg({ text: 'Cambios guardados exitosamente', isError: false });
+      await updateIncidencia(id, { responsable_id: Number(editResponsable) });
+      await refreshIncidencia();
+      setSaveMsg({ text: 'Incidencia asignada al técnico', isError: false });
       setTimeout(() => setSaveMsg(null), 3000);
+    } catch (err) {
+      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al asignar', isError: true });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Coordinador: verificar y cerrar (finalizado -> dispara calibración)
+  async function handleCerrar() {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      await updateIncidencia(id, { estado: 'finalizado' });
+      await refreshIncidencia();
+      setSaveMsg({ text: 'Incidencia cerrada — se generó la calibración', isError: false });
+      setTimeout(() => setSaveMsg(null), 4000);
+    } catch (err) {
+      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al cerrar', isError: true });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCancelar() {
+    if (!confirm('¿Cancelar esta incidencia? (falso positivo / no aplica)')) return;
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      await updateIncidencia(id, { estado: 'cancelado' });
+      await refreshIncidencia();
+      setSaveMsg({ text: 'Incidencia cancelada', isError: false });
+      setTimeout(() => setSaveMsg(null), 3000);
+    } catch (err) {
+      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al cancelar', isError: true });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Técnico: registrar mantenimiento (auto -> resuelto en el backend)
+  async function handleSubmitMantenimiento() {
+    if (!mtoDiagnostico.trim() || !mtoAcciones.trim() || !mtoConclusion.trim()) {
+      setSaveMsg({ text: 'Diagnóstico, Acciones y Conclusión son obligatorios', isError: true });
+      return;
+    }
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      await submitMantenimiento(id, {
+        diagnostico: mtoDiagnostico,
+        acciones_realizadas: mtoAcciones,
+        conclusion: mtoConclusion,
+        fecha_ejecucion: new Date().toISOString(),
+        repuesto_ids: selectedRepuestoIds,
+        adjuntos: adjuntos.filter((a) => a.filename && a.file_url),
+      });
+      await refreshIncidencia();
+      setSaveMsg({ text: 'Mantenimiento registrado — incidencia marcada como Resuelta', isError: false });
+      setTimeout(() => setSaveMsg(null), 4000);
     } catch (err) {
       setSaveMsg({ text: err instanceof Error ? err.message : 'Error al guardar', isError: true });
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function refreshIncidencia() {
+    const refreshed = await fetchIncidencia(id);
+    setIncidencia(refreshed);
+    setEditResponsable(refreshed.responsable_id ? String(refreshed.responsable_id) : '');
+    if (refreshed.mantenimiento_correctivo) {
+      setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
+      setMtoAcciones(refreshed.mantenimiento_correctivo.acciones_realizadas ?? '');
+      setMtoConclusion(refreshed.mantenimiento_correctivo.conclusion ?? '');
     }
   }
 
@@ -230,24 +258,28 @@ export default function IncidenciaDetailPage() {
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
             Incidencia #{incidencia.id}
           </h1>
-          {isEditMode ? (
-            <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
-              Editando
-            </span>
-          ) : (
-            <span className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
-              Solo lectura
-            </span>
-          )}
+          <StatusBadge status={incidencia.estado} />
         </div>
         <div className="flex gap-2">
-          {!isEditMode && !isFinalizado && (
-            <Link
-              href={`/incidencias/${id}?mode=edit`}
-              className="rounded-md bg-amber-500 px-3 py-2 text-sm font-medium text-white hover:bg-amber-600"
+          {/* Coordinador: verificar y cerrar (resuelto -> finalizado + calibración) */}
+          {canCerrar && (
+            <button
+              onClick={handleCerrar}
+              disabled={saving}
+              className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
             >
-              Editar
-            </Link>
+              Verificar y cerrar
+            </button>
+          )}
+          {/* Coordinador: cancelar (falso positivo) */}
+          {canCancelar && (
+            <button
+              onClick={handleCancelar}
+              disabled={saving}
+              className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400"
+            >
+              Cancelar
+            </button>
           )}
           {incidencia.problema_id && (
             <Link
@@ -305,43 +337,39 @@ export default function IncidenciaDetailPage() {
           <div>
             <dt className="text-xs font-medium uppercase text-zinc-500">Estado</dt>
             <dd className="mt-0.5">
-              {isEditMode ? (
-                <select
-                  value={editEstado}
-                  onChange={(e) => setEditEstado(e.target.value)}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                >
-                  {/* solo el estado actual + las transiciones válidas (ITIL) */}
-                  <option value={incidencia.estado}>
-                    {ESTADO_LABEL[incidencia.estado] ?? incidencia.estado}
-                  </option>
-                  {(VALID_TRANSITIONS[incidencia.estado] ?? []).map((s) => (
-                    <option key={s} value={s}>{ESTADO_LABEL[s] ?? s}</option>
-                  ))}
-                </select>
-              ) : (
-                <StatusBadge status={incidencia.estado} />
-              )}
+              <StatusBadge status={incidencia.estado} />
             </dd>
           </div>
           <div>
             <dt className="text-xs font-medium uppercase text-zinc-500">
-              Responsable {isEditMode && <span className="text-red-500">*</span>}
+              Responsable
             </dt>
             <dd className="mt-0.5">
-              {isEditMode ? (
-                <select
-                  value={editResponsable}
-                  onChange={(e) => setEditResponsable(e.target.value)}
-                  className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                >
-                  <option value="" disabled>Seleccionar responsable</option>
-                  {usuarios.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.nombre} {u.apellido}
-                    </option>
-                  ))}
-                </select>
+              {/* Coordinador ASIGNA (pendiente): selector + botón -> en_ejecucion */}
+              {canAsignar ? (
+                <div className="flex items-center gap-2">
+                  <select
+                    value={editResponsable}
+                    onChange={(e) => setEditResponsable(e.target.value)}
+                    className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+                  >
+                    <option value="" disabled>Seleccionar técnico</option>
+                    {usuarios
+                      .filter((u) => u.rol === 'tecnico')
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.nombre} {u.apellido}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={handleAsignar}
+                    disabled={saving || !editResponsable}
+                    className="rounded-md bg-blue-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    Asignar
+                  </button>
+                </div>
               ) : (
                 <span className="text-sm text-zinc-900 dark:text-zinc-100">
                   {responsable ? `${responsable.nombre} ${responsable.apellido}` : 'Sin asignar'}
@@ -407,8 +435,8 @@ export default function IncidenciaDetailPage() {
           </div>
         )}
 
-        {/* ITIL: vincular a un Problema (causa raíz) — en modo edición */}
-        {isEditMode && (
+        {/* ITIL: vincular a un Problema (causa raíz) — gestión del coordinador */}
+        {isCoordinador && !isCerrada && (
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <dt className="text-xs font-medium uppercase text-zinc-500">
               Problema (causa raíz)
@@ -439,8 +467,8 @@ export default function IncidenciaDetailPage() {
           Mantenimiento Correctivo
         </h2>
 
-        {/* Read-only mode OR has existing mantenimiento */}
-        {(!isEditMode || hasMantenimiento) ? (
+        {/* Vista solo-lectura, salvo que el técnico deba registrar el mantenimiento */}
+        {(!canRegistrarMantenimiento || hasMantenimiento) ? (
           <div className="space-y-4">
             {mto ? (
               <>
@@ -662,29 +690,23 @@ export default function IncidenciaDetailPage() {
         )}
       </div>
 
-      {/* Save button (edit mode only) */}
-      {isEditMode && (
-        <div className="mt-6 flex items-center gap-3">
+      {/* Técnico: guardar el mantenimiento correctivo (-> incidencia Resuelta) */}
+      <div className="mt-6 flex items-center gap-3">
+        {canRegistrarMantenimiento && !hasMantenimiento && (
           <button
-            onClick={handleSave}
+            onClick={handleSubmitMantenimiento}
             disabled={saving}
             className="rounded-md bg-blue-600 px-6 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            {saving ? 'Guardando...' : 'Guardar'}
+            {saving ? 'Guardando...' : 'Guardar mantenimiento'}
           </button>
-          <Link
-            href={`/incidencias/${id}`}
-            className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
-          >
-            Cancelar
-          </Link>
-          {saveMsg && (
-            <span className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}>
-              {saveMsg.text}
-            </span>
-          )}
-        </div>
-      )}
+        )}
+        {saveMsg && (
+          <span className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}>
+            {saveMsg.text}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

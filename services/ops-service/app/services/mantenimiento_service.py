@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -58,6 +60,17 @@ def submit_mantenimiento(
             file_url=adjunto.file_url,
         )
         db.add(archivo)
+
+    # ITIL: al registrar el mantenimiento, el técnico marca el trabajo hecho ->
+    # la incidencia avanza automáticamente a 'resuelto' (el coordinador luego
+    # verifica y cierra con 'finalizado', lo que dispara la calibración).
+    # Solo avanza desde estados abiertos previos al cierre.
+    if incidencia.estado in ("pendiente", "en_ejecucion"):
+        now = datetime.now(timezone.utc)
+        incidencia.estado = "resuelto"
+        if incidencia.fecha_resolucion is None:
+            incidencia.fecha_resolucion = now
+        incidencia.updated_at = now
 
     db.commit()
     db.refresh(mantenimiento)

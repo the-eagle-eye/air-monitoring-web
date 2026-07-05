@@ -2,7 +2,7 @@ import { test, expect, type Page } from '@playwright/test';
 import { injectFakeAuth } from './helpers/auth';
 import { GW, EMPTY_LIST } from './helpers/constants';
 
-const MOCK_INCIDENCIA = {
+const MOCK_INCIDENCIA: Record<string, unknown> = {
   id: 1,
   device_id: 'T102',
   tipo: 'correctiva',
@@ -65,75 +65,52 @@ async function gotoIncidencia(page: Page, path = '/incidencias/1') {
   await page.goto(path, { waitUntil: 'domcontentloaded' });
 }
 
-test.describe('Incidencia detail page', () => {
-  test('renders incidencia metadata in read-only mode', async ({ page }) => {
+test.describe('Incidencia detail page (flujo ITIL por rol)', () => {
+  test('renders incidencia metadata + estado badge', async ({ page }) => {
     await injectFakeAuth(page, 'administrador');
     await setupMocks(page);
     await gotoIncidencia(page);
 
     await expect(page.getByText('Incidencia #1')).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText('T102').first()).toBeVisible();
-    await expect(page.getByText(/Solo lectura/i)).toBeVisible();
     await expect(page.getByText(/Alta/i).first()).toBeVisible();
   });
 
-  test('Editar button switches to edit mode', async ({ page }) => {
+  // Coordinador: incidencia pendiente -> puede ASIGNAR técnico (no exige mantenimiento)
+  test('coordinador can assign technician on pendiente (no mantenimiento required)', async ({ page }) => {
     await injectFakeAuth(page, 'administrador');
     await setupMocks(page);
     await gotoIncidencia(page);
 
-    const editBtn = page.getByRole('link', { name: /Editar/i });
-    await editBtn.waitFor({ timeout: 15_000 });
-    await editBtn.click();
-
-    await page.waitForURL('**/incidencias/1?mode=edit');
-    await expect(page.getByText(/Editando/i)).toBeVisible();
-    await expect(page.locator('select').first()).toBeVisible();
+    // botón Asignar visible; selector de técnico presente
+    await expect(page.getByRole('button', { name: /^Asignar$/i })).toBeVisible({ timeout: 15_000 });
+    const tecSelect = page.locator('select').first();
+    await expect(tecSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
+    // NO se le pide llenar mantenimiento para asignar (no hay botón "Guardar mantenimiento")
+    await expect(page.getByRole('button', { name: /Guardar mantenimiento/i })).toHaveCount(0);
   });
 
-  test('edit mode estado dropdown shows only valid ITIL transitions', async ({ page }) => {
-    // ITIL: desde 'pendiente' solo se permite en_ejecucion o cancelado
-    // (NO finalizado directo). El mock crea la incidencia en 'pendiente'.
+  // Coordinador: incidencia resuelta -> puede VERIFICAR Y CERRAR
+  test('coordinador sees Verificar y cerrar on resuelto', async ({ page }) => {
     await injectFakeAuth(page, 'administrador');
-    await setupMocks(page);
-    await gotoIncidencia(page, '/incidencias/1?mode=edit');
+    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'resuelto', responsable_id: 1,
+      mantenimiento_correctivo: { id: 1, diagnostico: 'd', acciones_realizadas: 'a', conclusion: 'c' } });
+    await gotoIncidencia(page);
 
-    const estadoSelect = page.locator('select').first();
-    await estadoSelect.waitFor({ timeout: 15_000 });
-
-    // estado actual + transiciones válidas
-    await expect(estadoSelect.locator('option[value="pendiente"]')).toBeAttached();
-    await expect(estadoSelect.locator('option[value="en_ejecucion"]')).toBeAttached();
-    await expect(estadoSelect.locator('option[value="cancelado"]')).toBeAttached();
-    // finalizado NO es transición válida desde pendiente
-    await expect(estadoSelect.locator('option[value="finalizado"]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Verificar y cerrar/i })).toBeVisible({ timeout: 15_000 });
   });
 
-  test('edit mode shows responsable dropdown with usuarios', async ({ page }) => {
-    await injectFakeAuth(page, 'administrador');
-    await setupMocks(page);
-    await gotoIncidencia(page, '/incidencias/1?mode=edit');
-
-    // en modo edición hay 3 selects: estado, responsable, y vincular-problema (ITIL)
-    await expect(page.locator('select')).toHaveCount(3, { timeout: 15_000 });
-    const responsableSelect = page.locator('select').nth(1);
-    await expect(responsableSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
-  });
-
-  test('saving without responsable shows validation error', async ({ page }) => {
-    await injectFakeAuth(page, 'administrador');
-    await setupMocks(page);
-    await gotoIncidencia(page, '/incidencias/1?mode=edit');
+  // Técnico: incidencia en_ejecucion asignada -> ve el formulario de mantenimiento
+  test('tecnico sees mantenimiento form on en_ejecucion', async ({ page }) => {
+    await injectFakeAuth(page, 'tecnico');
+    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'en_ejecucion', responsable_id: 1 });
+    await gotoIncidencia(page);
 
     await expect(page.locator('textarea').first()).toBeVisible({ timeout: 15_000 });
-
-    // Fill mantenimiento fields (required) but leave responsable empty
-    await page.locator('textarea').nth(0).fill('Sensor degradado');
-    await page.locator('textarea').nth(1).fill('Reemplazo UV');
-    await page.locator('textarea').nth(2).fill('Equipo operativo');
-
-    await page.getByRole('button', { name: /Guardar/i }).click();
-    await expect(page.getByText(/Responsable es obligatorio/i)).toBeVisible({ timeout: 5_000 });
+    await expect(page.getByRole('button', { name: /Guardar mantenimiento/i })).toBeVisible();
+    // el técnico NO ve acciones de coordinador
+    await expect(page.getByRole('button', { name: /Verificar y cerrar/i })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Asignar$/i })).toHaveCount(0);
   });
 
   test('Ver Equipo link points to correct device', async ({ page }) => {
@@ -146,12 +123,13 @@ test.describe('Incidencia detail page', () => {
     await expect(link).toHaveAttribute('href', '/equipos/T102');
   });
 
-  test('finalizado incidencia hides Editar button', async ({ page }) => {
+  // Incidencia cerrada: sin botones de acción
+  test('finalizado incidencia has no action buttons', async ({ page }) => {
     await injectFakeAuth(page, 'administrador');
     await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'finalizado' });
     await gotoIncidencia(page);
 
     await expect(page.getByText('Incidencia #1')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('link', { name: /Editar/i })).not.toBeVisible();
+    await expect(page.getByRole('button', { name: /Asignar|Verificar y cerrar/i })).toHaveCount(0);
   });
 });

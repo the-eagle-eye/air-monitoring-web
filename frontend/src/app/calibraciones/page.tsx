@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { usePolling } from '@/hooks/usePolling';
 import Link from 'next/link';
+import { useAuth } from '@/lib/auth';
 import { fetchEquipos } from '@/lib/api/lecturas';
 import {
   fetchCalibracionesOps,
@@ -15,6 +16,9 @@ import type { Equipo } from '@/types/lectura';
 import type { CalibracionOps, Proveedor } from '@/types/ops';
 
 export default function CalibracionesPage() {
+  const { user } = useAuth();
+  // El técnico solo COMPLETA sus calibraciones asignadas; no crea nuevas.
+  const canCrear = user?.rol === 'coordinador' || user?.rol === 'administrador';
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [proveedores, setProveedores] = useState<Proveedor[]>([]);
   const [calibraciones, setCalibraciones] = useState<CalibracionOps[]>([]);
@@ -186,15 +190,17 @@ export default function CalibracionesPage() {
             </span>
           )}
         </div>
-        <button
-          onClick={() => setShowForm(!showForm)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          {showForm ? 'Cancelar' : 'Nueva Calibracion'}
-        </button>
+        {canCrear && (
+          <button
+            onClick={() => setShowForm(!showForm)}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          >
+            {showForm ? 'Cancelar' : 'Nueva Calibracion'}
+          </button>
+        )}
       </div>
 
-      {showForm && (
+      {canCrear && showForm && (
         <div className="mb-6 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
           <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-4">
             <div>

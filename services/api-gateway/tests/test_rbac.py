@@ -311,3 +311,16 @@ def test_iot_readings_post_bypasses_auth(client):
             json={"device_id": "T101"},
         )
         assert response.status_code == 200
+
+
+# -- Calibraciones: técnico puede PUT (completar) pero no POST (crear) --
+def test_tecnico_can_put_calibracion():
+    assert check_write_permission("/api/v1/calibraciones/5", "PUT", "tecnico") is True
+
+
+def test_tecnico_cannot_post_calibracion():
+    assert check_write_permission("/api/v1/calibraciones", "POST", "tecnico") is False
+
+
+def test_coordinador_can_post_calibracion():
+    assert check_write_permission("/api/v1/calibraciones", "POST", "coordinador") is True

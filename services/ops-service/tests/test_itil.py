@@ -188,3 +188,128 @@ def test_update_incidencia_invalid_transition_returns_400(client):
     r = client.put(f"/api/v1/incidencias/{inc['id']}", json={
         "estado": "finalizado"})
     assert r.status_code == 400
+
+
+# --- Flujo por rol: transiciones automáticas por acción ----------------------
+
+def test_asignar_responsable_auto_en_ejecucion(db_session):
+    """Coordinador asigna responsable a incidencia pendiente -> auto en_ejecucion."""
+    from app.models.usuario import Usuario
+    tec = db_session.query(Usuario).filter(Usuario.rol == "tecnico").first()
+    inc = _create(db_session)
+    assert inc.estado == "pendiente"
+    updated = incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(responsable_id=tec.id))
+    assert updated.estado == "en_ejecucion"       # auto-avanzó
+    assert updated.responsable_id == tec.id
+    assert updated.fecha_asignacion is not None
+
+
+def test_asignar_no_reabre_si_ya_avanzada(db_session):
+    """Asignar sobre una incidencia ya en_ejecucion no la retrocede."""
+    from app.models.usuario import Usuario
+    tec = db_session.query(Usuario).filter(Usuario.rol == "tecnico").first()
+    inc = _create(db_session)
+    incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(estado="en_ejecucion"))
+    updated = incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(responsable_id=tec.id))
+    assert updated.estado == "en_ejecucion"  # no cambia
+
+
+def test_submit_mantenimiento_auto_resuelto(db_session):
+    """Técnico registra mantenimiento -> incidencia auto a 'resuelto'."""
+    from app.services import mantenimiento_service
+    from app.schemas.mantenimiento import MantenimientoCreate
+    inc = _create(db_session)
+    incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(estado="en_ejecucion"))
+    mantenimiento_service.submit_mantenimiento(
+        db_session, inc.id,
+        MantenimientoCreate(diagnostico="d", acciones_realizadas="a",
+                            conclusion="c"))
+    db_session.refresh(inc)
+    assert inc.estado == "resuelto"
+    assert inc.fecha_resolucion is not None
+
+
+def test_cerrar_desde_resuelto_genera_calibracion(db_session):
+    """Coordinador cierra (resuelto -> finalizado) y se auto-crea calibración."""
+    from app.services import mantenimiento_service
+    from app.schemas.mantenimiento import MantenimientoCreate
+    from app.models.incidencia import Incidencia
+    inc = _create(db_session)
+    incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(estado="en_ejecucion"))
+    mantenimiento_service.submit_mantenimiento(
+        db_session, inc.id,
+        MantenimientoCreate(diagnostico="d", acciones_realizadas="a", conclusion="c"))
+    # ahora resuelto -> finalizar
+    incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(estado="finalizado"))
+    # se creó una incidencia de calibración para el mismo equipo
+    cal = (db_session.query(Incidencia)
+           .filter(Incidencia.device_id == inc.device_id,
+                   Incidencia.tipo == "calibracion").first())
+    assert cal is not None
+
+
+# --- Calibraciones del técnico (completar las suyas) -------------------------
+
+def test_calibracion_hereda_responsable_de_correctiva(db_session):
+    """Al finalizar una correctiva asignada a un técnico, la calibración
+    auto-creada hereda ese responsable (no el coordinador)."""
+    from app.models.usuario import Usuario
+    from app.models.incidencia import Incidencia
+    from app.services import mantenimiento_service
+    from app.schemas.mantenimiento import MantenimientoCreate
+    tec = db_session.query(Usuario).filter(Usuario.rol == "tecnico").first()
+
+    inc = incidencia_service.create_incidencia(
+        db_session, IncidenciaCreate(device_id="T101", tipo="correctiva"))
+    # asignar al técnico -> en_ejecucion
+    incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(responsable_id=tec.id))
+    # técnico completa mantenimiento -> resuelto
+    mantenimiento_service.submit_mantenimiento(
+        db_session, inc.id,
+        MantenimientoCreate(diagnostico="d", acciones_realizadas="a", conclusion="c"))
+    # coordinador finaliza -> auto-crea calibración
+    incidencia_service.update_incidencia(
+        db_session, inc.id, IncidenciaUpdate(estado="finalizado"))
+
+    cal_inc = (db_session.query(Incidencia)
+               .filter(Incidencia.device_id == "T101",
+                       Incidencia.tipo == "calibracion").first())
+    assert cal_inc is not None
+    assert cal_inc.responsable_id == tec.id  # heredó el técnico
+
+
+def test_list_calibraciones_filtra_por_tecnico(db_session):
+    """list_calibraciones con responsable_id solo devuelve las del técnico."""
+    from app.models.usuario import Usuario
+    from app.models.calibracion import Calibracion
+    from app.services import calibracion_service
+    tec = db_session.query(Usuario).filter(Usuario.rol == "tecnico").first()
+    coord = db_session.query(Usuario).filter(Usuario.rol == "coordinador").first()
+
+    # incidencia de calibración del técnico
+    inc_tec = incidencia_service.create_incidencia(
+        db_session, IncidenciaCreate(device_id="T101", tipo="calibracion",
+                                     responsable_id=tec.id))
+    db_session.add(Calibracion(incidencia_id=inc_tec.id, device_id="T101"))
+    # incidencia de calibración de otro (coordinador)
+    inc_otro = incidencia_service.create_incidencia(
+        db_session, IncidenciaCreate(device_id="T102", tipo="calibracion",
+                                     responsable_id=coord.id))
+    db_session.add(Calibracion(incidencia_id=inc_otro.id, device_id="T102"))
+    db_session.commit()
+
+    items, total = calibracion_service.list_calibraciones(
+        db_session, responsable_id=tec.id)
+    assert total == 1
+    assert items[0].device_id == "T101"
+
+    # sin filtro: ve todas
+    items_all, total_all = calibracion_service.list_calibraciones(db_session)
+    assert total_all == 2

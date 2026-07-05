@@ -16,7 +16,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
     '/lecturas', '/reportes',
   ],
   tecnico: [
-    '/', '/dashboard-tecnico', '/equipos', '/incidencias', '/repuestos',
+    '/', '/dashboard-tecnico', '/equipos', '/incidencias', '/calibraciones', '/repuestos',
   ],
 };
 

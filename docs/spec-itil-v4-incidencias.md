@@ -16,6 +16,21 @@
 
 **ITIL v4 COMPLETO (backend + frontend).**
 
+## Adenda — flujo por rol y calibraciones del técnico (2026-07-05)
+
+Refinamiento del flujo operativo tras feedback:
+- **Estado avanza por ACCIÓN, no por dropdown.** Coordinador *Asigna* técnico →
+  auto `en_ejecucion`; técnico *Guarda mantenimiento* → auto `resuelto`;
+  coordinador *Verifica y cierra* → `finalizado` (+ calibración); *Cancelar* →
+  `cancelado`. El detalle de incidencia muestra botones contextuales por rol
+  (useAuth). Se eliminó el bug de que asignar exigía llenar el mantenimiento.
+- **El técnico también hace calibraciones.** La calibración auto-creada **hereda
+  el responsable** de la correctiva (el técnico). `list_calibraciones` filtra por
+  responsable cuando el rol es técnico (solo ve las suyas). RBAC: el técnico puede
+  **completar** (PUT) pero **no crear** (POST) calibraciones. Nav + RouteGuard
+  habilitan `/calibraciones` al técnico; el botón "Nueva Calibración" queda oculto
+  para él.
+
 ## Objetivo
 
 Elevar la gestión de incidencias del MVP a **Gestión de Incidentes + Problemas

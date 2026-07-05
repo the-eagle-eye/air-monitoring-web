@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -40,10 +40,19 @@ def list_calibraciones(
     device_id: str | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
+    x_user_rol: str | None = Header(None),
+    x_user_id: str | None = Header(None),
     db: Session = Depends(get_db),
 ):
+    # El técnico solo ve las calibraciones de sus incidencias asignadas.
+    responsable_id = None
+    if x_user_rol == "tecnico" and x_user_id:
+        try:
+            responsable_id = int(x_user_id)
+        except ValueError:
+            pass
     items, total = calibracion_service.list_calibraciones(
-        db, device_id, page, page_size
+        db, device_id, page, page_size, responsable_id=responsable_id
     )
     return CalibracionListResponse(
         items=[_calibracion_with_estado(c) for c in items],
