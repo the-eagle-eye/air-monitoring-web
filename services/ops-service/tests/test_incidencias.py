@@ -117,22 +117,6 @@ class TestIncidencias:
         })
         assert resp.status_code == 400
 
-    def test_alert_trigger_alta(self, client):
-        resp = client.post("/api/v1/incidencias/alert-trigger", json={
-            "device_id": "T101",
-        })
-        assert resp.status_code in (200, 201)
-
-    def test_alert_trigger_media(self, client):
-        resp = client.post("/api/v1/incidencias/alert-trigger", json={
-            "device_id": "T103",
-            "nivel_riesgo": "media",
-        })
-        assert resp.status_code == 201
-        data = resp.json()
-        assert data["prioridad"] == "media"
-        assert data["tipo"] == "correctiva"
-
     def test_submit_mantenimiento_duplicate(self, client):
         create_resp = client.post("/api/v1/incidencias", json={
             "device_id": "T101", "tipo": "correctiva",

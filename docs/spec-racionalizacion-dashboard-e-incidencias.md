@@ -19,6 +19,16 @@
   (`_notify_ops_alert` → no-op); endpoints `/predictions` y `/alerts` marcados
   `deprecated=True`. El pipeline RF y el modelo .pkl se **conservan** (retiro físico
   total = PR dedicado, para no romper ~40 tests del pipeline). Tests actualizados.
+- **R3-BIS — RETIRO FÍSICO TOTAL (C2, ✅ 2026-07-05):** ejecutado el PR dedicado.
+  Se eliminaron del ml-service todos los módulos RF (prediction/alert/model_interface/
+  v2_interface + pipeline train/features/synthetic/real_data), routers `/predictions`
+  y `/alerts`, modelos ORM `Prediccion`/`Alerta` + schemas, artefactos `ml_artifacts*`
+  y wiring Docker; migración `ml_006` suelta las tablas (sin borrar `ml_001`, raíz de
+  la cadena alembic). Cross-service limpiado (gateway `/kpis`, ops `/alert-trigger`/
+  `/evaluar`/funciones RF, `origen` sin `prediccion_rul`, email a lenguaje ensemble).
+  `ml-service-isolation` (v3 AE+IF, NO es RF) intacto — el gateway conserva
+  `ML_BACKEND=isolation` que usa esas rutas. Regresión: 334 backend verde
+  (−42 tests, todos RF). Ver `BACKLOG_POST_MVP.md` C2.
 - **Regresión:** 277 tests en verde (ml 70, ops 117, iot 21, gateway 69). Dashboard
   verificado en navegador: sin cards vacías, sin nav legacy, distribución/tendencia OK.
 

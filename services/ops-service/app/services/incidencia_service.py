@@ -157,7 +157,7 @@ def update_incidencia(
     db.commit()
     db.refresh(incidencia)
 
-    # Regla: si correctiva se finaliza, auto-crear calibracion + desactivar alertas
+    # Regla: si correctiva se finaliza, auto-crear calibracion
     if (
         incidencia.tipo == "correctiva"
         and incidencia.estado == "finalizado"
@@ -169,14 +169,6 @@ def update_incidencia(
             logger.exception(
                 "Error creando calibracion automatica para incidencia %s",
                 incidencia.id,
-            )
-        try:
-            from app.config import settings
-            _deactivate_device_alerts(incidencia.device_id, settings.ML_SERVICE_URL)
-        except Exception:
-            logger.exception(
-                "Error desactivando alertas para equipo %s",
-                incidencia.device_id,
             )
 
     return incidencia
@@ -202,21 +194,6 @@ def _fetch_equipo_data(iot_service_url: str, device_id: str) -> dict:
         return resp.json()
     except (httpx.HTTPError, Exception):
         return {"device_id": device_id}
-
-
-def _deactivate_device_alerts(device_id: str, ml_service_url: str) -> None:
-    """Desactivar alertas activas en ml-service (fire-and-forget)."""
-    try:
-        resp = httpx.patch(
-            f"{ml_service_url}/api/v1/alerts/deactivate/{device_id}",
-            timeout=10.0,
-        )
-        resp.raise_for_status()
-        logger.info("Alertas desactivadas para equipo %s", device_id)
-    except Exception:
-        logger.exception(
-            "Error desactivando alertas en ml-service para %s", device_id
-        )
 
 
 def _auto_create_calibracion(
@@ -257,57 +234,6 @@ def _auto_create_calibracion(
     )
 
     return cal_incidencia
-
-
-def create_alert_triggered_incidencia(
-    db: Session, device_id: str, iot_service_url: str = "",
-    nivel_riesgo: str = "alta",
-) -> Incidencia | None:
-    """Crear incidencia correctiva cuando se detecta alerta alta o media.
-
-    Idempotente: no crea duplicados si ya existe una correctiva hoy para el equipo.
-    Retorna la incidencia creada, o None si ya existia.
-    """
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
-    existing = (
-        db.query(Incidencia)
-        .filter(
-            Incidencia.device_id == device_id,
-            Incidencia.tipo == "correctiva",
-            Incidencia.created_at >= today_start,
-        )
-        .first()
-    )
-    if existing:
-        return None
-
-    coordinador = _get_coordinador(db)
-    prioridad = "alta" if nivel_riesgo == "alta" else "media"
-    rul_desc = "< 30" if nivel_riesgo == "alta" else "< 60"
-
-    incidencia = Incidencia(
-        device_id=device_id,
-        tipo="correctiva",
-        descripcion=(
-            f"Incidencia automatica: alerta {nivel_riesgo} detectada "
-            f"para equipo {device_id} (RUL {rul_desc} dias)"
-        ),
-        prioridad=prioridad,
-        responsable_id=coordinador.id if coordinador else None,
-    )
-    db.add(incidencia)
-    db.commit()
-    db.refresh(incidencia)
-
-    equipo_data = _fetch_equipo_data(iot_service_url, device_id)
-    email_service.send_alerta_correctiva_notification(
-        db, equipo_data, incidencia.id
-    )
-
-    return incidencia
 
 
 # --- Regla de consolidacion de alertas del monitor de salud ---
@@ -419,73 +345,6 @@ def _notify_monitor_incidencia(
         logger.exception(
             "Error notificando incidencia monitor #%s", incidencia.id
         )
-
-
-def evaluate_alerts(db: Session, ml_service_url: str) -> list[Incidencia]:
-    """Evaluar alertas alta y media del ml-service y crear incidencias automaticas."""
-    created_incidencias: list[Incidencia] = []
-    today_start = datetime.now(timezone.utc).replace(
-        hour=0, minute=0, second=0, microsecond=0
-    )
-
-    for nivel in ("alta", "media"):
-        try:
-            response = httpx.get(
-                f"{ml_service_url}/api/v1/alerts",
-                params={"estado": "activa", "nivel_riesgo": nivel, "page_size": "200"},
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            data = response.json()
-        except (httpx.HTTPError, Exception):
-            continue
-
-        alertas = data.get("items", [])
-
-        # Agrupar alertas de hoy por device_id
-        device_counts: dict[str, int] = {}
-        for alerta in alertas:
-            created = alerta.get("created_at", "")
-            try:
-                created_dt = datetime.fromisoformat(created)
-                if created_dt >= today_start:
-                    did = alerta["device_id"]
-                    device_counts[did] = device_counts.get(did, 0) + 1
-            except (ValueError, KeyError):
-                continue
-
-        for device_id, count in device_counts.items():
-            if count < 2:
-                continue
-
-            existing = (
-                db.query(Incidencia)
-                .filter(
-                    Incidencia.device_id == device_id,
-                    Incidencia.tipo == "correctiva",
-                    Incidencia.created_at >= today_start,
-                )
-                .first()
-            )
-            if existing:
-                continue
-
-            prioridad = "alta" if nivel == "alta" else "media"
-            incidencia = Incidencia(
-                device_id=device_id,
-                tipo="correctiva",
-                descripcion=(
-                    f"Incidencia automatica: {count} alertas {nivel} detectadas "
-                    f"para equipo {device_id} en el dia de hoy"
-                ),
-                prioridad=prioridad,
-            )
-            db.add(incidencia)
-            db.commit()
-            db.refresh(incidencia)
-            created_incidencias.append(incidencia)
-
-    return created_incidencias
 
 
 def _next_anniversary(fecha_ingreso: date, today: date) -> date:

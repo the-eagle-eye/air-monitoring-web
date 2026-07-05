@@ -22,11 +22,6 @@ from app.models.archivo_adjunto import ArchivoAdjunto
 from app.services import incidencia_service, mantenimiento_service, problema_service
 
 
-class AlertTriggerRequest(BaseModel):
-    device_id: str
-    nivel_riesgo: str = "alta"
-
-
 class MonitorAlertRequest(BaseModel):
     device_id: str
     severidad: str  # OBSERVADO | EN_RIESGO | CRITICO
@@ -171,12 +166,6 @@ def submit_mantenimiento(
     return _build_mantenimiento_response(mantenimiento, db)
 
 
-@router.post("/evaluar", response_model=list[IncidenciaResponse])
-def evaluar_alertas(db: Session = Depends(get_db)):
-    created = incidencia_service.evaluate_alerts(db, settings.ML_SERVICE_URL)
-    return [IncidenciaResponse.model_validate(i) for i in created]
-
-
 @router.post("/monitor-alert")
 def monitor_alert(data: MonitorAlertRequest, db: Session = Depends(get_db)):
     """Regla de consolidacion del monitor de salud (docs/regla-consolidacion-alertas.md).
@@ -203,17 +192,3 @@ def monitor_alert(data: MonitorAlertRequest, db: Session = Depends(get_db)):
         )
     # noop: severidad no anomala, o ya existe abierto sin escalada
     return JSONResponse(status_code=200, content={"accion": "noop"})
-
-
-@router.post("/alert-trigger", response_model=IncidenciaResponse, status_code=201)
-def alert_trigger(data: AlertTriggerRequest, db: Session = Depends(get_db)):
-    """Crear incidencia correctiva automatica cuando ml-service detecta alerta alta o media."""
-    incidencia = incidencia_service.create_alert_triggered_incidencia(
-        db, data.device_id, settings.IOT_SERVICE_URL, nivel_riesgo=data.nivel_riesgo
-    )
-    if incidencia is None:
-        return JSONResponse(
-            status_code=200,
-            content={"detail": "Incidencia correctiva ya existe para hoy"},
-        )
-    return IncidenciaResponse.model_validate(incidencia)

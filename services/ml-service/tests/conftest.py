@@ -15,8 +15,6 @@ from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 
 from shared.models.base import Base
-from app.models.prediccion import Prediccion  # noqa: F401
-from app.models.alerta import Alerta  # noqa: F401
 from app.models.health_state import HealthReading, HealthDeviceState  # noqa: F401
 from app.models.model_metric import ModelMetric  # noqa: F401
 from app.main import app

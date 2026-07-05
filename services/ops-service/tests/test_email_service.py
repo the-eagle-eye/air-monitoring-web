@@ -122,4 +122,6 @@ class TestEmailService:
         call_args = mock_server.sendmail.call_args
         assert "coord@test.com" in call_args[0][1]
         msg_str = call_args[0][2]
-        assert "ALERTA ALTA" in msg_str
+        # El asunto viaja como cabecera (no codificado): confirma el subject nuevo
+        # (post-retiro RF: "ALERTA: Incidencia correctiva creada - Equipo ...").
+        assert "Incidencia correctiva creada" in msg_str

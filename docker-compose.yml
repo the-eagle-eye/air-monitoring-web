@@ -68,7 +68,6 @@ services:
       - IOT_SERVICE_URL=http://iot-service:8001
       - ML_SERVICE_URL=http://ml-service:8002
       - OPS_SERVICE_URL=http://ops-service:8003
-      - ML_ARTIFACTS_PATH=/app/ml_artifacts
       - ENSEMBLE_ARTIFACTS_PATH=/app/ml_artifacts_ensemble_v1
     depends_on:
       db:
@@ -76,7 +75,6 @@ services:
     volumes:
       - ./shared:/app/shared
       - ./services/ml-service/app:/app/app
-      - ./services/ml-service/ml_artifacts:/app/ml_artifacts
       - ./services/ml-service/ml_artifacts_ensemble_v1:/app/ml_artifacts_ensemble_v1
       - ./services/ml-service/scripts:/app/scripts
       - ./services/ml-proposal/dataset:/app/dataset_ensemble:ro

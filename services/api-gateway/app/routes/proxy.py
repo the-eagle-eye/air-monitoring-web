@@ -8,7 +8,10 @@ from app.services.ml_adapter import adapt_json_bytes
 
 router = APIRouter()
 
-# Routes that live on the ML backend. Which backend depends on ML_BACKEND.
+# Rutas del backend v3 de detección de anomalías por episodios
+# (ml-service-isolation), seleccionable con ML_BACKEND=isolation. El modelo
+# Random Forest que servía estas rutas en el ml-service "legacy" fue RETIRADO
+# (C2); con ML_BACKEND=legacy (default) el ml-service ya no las expone.
 _ML_ROUTE_PREFIXES = ("/api/v1/predictions", "/api/v1/alerts")
 
 # Non-ML routes.

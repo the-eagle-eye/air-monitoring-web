@@ -22,7 +22,7 @@ class IncidenciaCreate(BaseModel):
     impacto: Nivel | None = None    # default = criticidad del equipo
     urgencia: Nivel = "media"
     categoria: Categoria = "otro"
-    origen: Literal["manual", "monitor_salud", "prediccion_rul"] = "manual"
+    origen: Literal["manual", "monitor_salud"] = "manual"
     responsable_id: int | None = None
 
 

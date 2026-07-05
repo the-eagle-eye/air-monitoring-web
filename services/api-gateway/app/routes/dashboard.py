@@ -23,10 +23,9 @@ async def kpis(user: dict = Depends(get_current_user)):
     # Fetch data from all services in parallel
     import asyncio
 
-    iot_equipos, ml_alertas, ops_incidencias, ops_calibraciones = (
+    iot_equipos, ops_incidencias, ops_calibraciones = (
         await asyncio.gather(
             _fetch_json(f"{settings.IOT_SERVICE_URL}/api/v1/iot/equipos"),
-            _fetch_json(f"{settings.ML_SERVICE_URL}/api/v1/alerts?estado=activa&page_size=1000"),
             _fetch_json(f"{settings.OPS_SERVICE_URL}/api/v1/incidencias?page_size=1000"),
             _fetch_json(f"{settings.OPS_SERVICE_URL}/api/v1/calibraciones?page_size=1000"),
         )
@@ -36,15 +35,6 @@ async def kpis(user: dict = Depends(get_current_user)):
     equipos = iot_equipos if isinstance(iot_equipos, list) else []
     total_equipos = len(equipos)
     equipos_activos = sum(1 for e in equipos if e.get("estado") == "activo")
-
-    # ML KPIs
-    alertas_data = ml_alertas if isinstance(ml_alertas, dict) else {}
-    alertas_items = alertas_data.get("items", [])
-    alertas_por_nivel = {"alto": 0, "medio": 0, "bajo": 0}
-    for a in alertas_items:
-        nivel = a.get("nivel_riesgo", "").lower()
-        if nivel in alertas_por_nivel:
-            alertas_por_nivel[nivel] += 1
 
     # Ops KPIs
     incidencias_data = ops_incidencias if isinstance(ops_incidencias, dict) else {}
@@ -70,10 +60,6 @@ async def kpis(user: dict = Depends(get_current_user)):
         "equipos": {
             "total": total_equipos,
             "activos": equipos_activos,
-        },
-        "alertas": {
-            "activas": len(alertas_items),
-            "por_nivel": alertas_por_nivel,
         },
         "incidencias": {
             "abiertas": incidencias_abiertas,

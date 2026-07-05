@@ -113,7 +113,11 @@ def send_alerta_correctiva_notification(
     equipo_data: dict,
     incidencia_id: int,
 ) -> bool:
-    """Enviar notificacion a coordinadores cuando se crea incidencia correctiva por alerta alta.
+    """Notificar a coordinadores cuando el monitor de salud crea una correctiva.
+
+    Se dispara cuando el monitor de salud no supervisado (ensemble AE+IF) detecta
+    una anomalia confirmada en un equipo y la regla de consolidacion crea/escala
+    una incidencia correctiva.
 
     Args:
         db: Session de base de datos
@@ -136,9 +140,9 @@ def send_alerta_correctiva_notification(
     ubicacion = equipo_data.get("ubicacion", "N/A")
     parametro = equipo_data.get("parametro_medicion", "N/A")
 
-    asunto = f"ALERTA ALTA: Incidencia correctiva creada - Equipo {device_id}"
+    asunto = f"ALERTA: Incidencia correctiva creada - Equipo {device_id}"
     motivo_texto = (
-        f"Se ha detectado una prediccion de ALTO RIESGO (RUL <= 30 dias) "
+        f"El monitor de salud ha detectado una anomalia confirmada "
         f"para el equipo {device_id}. Se ha creado automaticamente una "
         f"incidencia correctiva que requiere atencion inmediata."
     )

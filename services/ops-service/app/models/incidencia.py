@@ -19,7 +19,7 @@ class Incidencia(Base):
     prioridad: Mapped[str] = mapped_column(
         String, nullable=False, default="media"
     )
-    # origen del incidente: manual | monitor_salud | prediccion_rul
+    # origen del incidente: manual | monitor_salud
     # permite el dedup selectivo de la regla de consolidacion (solo mira monitor_salud)
     origen: Mapped[str] = mapped_column(
         String, nullable=False, default="manual"

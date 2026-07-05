@@ -42,20 +42,6 @@ def _install_ac(mock_client, capture: list, response):
     mock_client.return_value = inst
 
 
-def test_ml_backend_legacy_routes_predictions_to_ml_service(client, monkeypatch):
-    monkeypatch.setattr(settings, "ML_BACKEND", "legacy")
-    captured: list[str] = []
-    with patch("app.routes.proxy.httpx.AsyncClient") as mock_client:
-        _install_ac(mock_client, captured, _mock_upstream())
-        resp = client.get(
-            "/api/v1/predictions/T103/latest",
-            headers={"Authorization": f"Bearer {_token()}"},
-        )
-    assert resp.status_code == 200
-    assert captured and settings.ML_SERVICE_URL in captured[0]
-    assert settings.ML_ISOLATION_SERVICE_URL not in captured[0]
-
-
 def test_ml_backend_isolation_routes_predictions_to_isolation(client, monkeypatch):
     monkeypatch.setattr(settings, "ML_BACKEND", "isolation")
     captured: list[str] = []
@@ -126,25 +112,3 @@ def test_isolation_backend_adapts_prediction_body(client, monkeypatch):
     assert body["remaining_useful_life_days"] is None
     assert body["anomaly_score"] == 1.0
     assert body["station_code"] == "CA-UCHU-01"
-
-
-def test_legacy_backend_does_not_touch_body(client, monkeypatch):
-    monkeypatch.setattr(settings, "ML_BACKEND", "legacy")
-    import json
-    legacy_body = json.dumps({
-        "id": 1,
-        "device_id": "T103",
-        "failure_probability": 0.75,
-        "remaining_useful_life_days": 12,
-        "risk_level": "alta",
-    }).encode("utf-8")
-
-    with patch("app.routes.proxy.httpx.AsyncClient") as mock_client:
-        _install_ac(mock_client, [], _mock_upstream(legacy_body))
-        resp = client.get(
-            "/api/v1/predictions/T103/latest",
-            headers={"Authorization": f"Bearer {_token()}"},
-        )
-    body = resp.json()
-    assert body["failure_probability"] == 0.75
-    assert body["remaining_useful_life_days"] == 12
