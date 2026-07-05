@@ -13,7 +13,7 @@ están implementados y verificados; se listan para dar contexto.
 
 | # | Item | Estado | Notas |
 |---|---|---|---|
-| C1 | **Ingesta IoT → dispara el ensemble** | ❌ **GAP CRÍTICO** | Hoy `iot-service` al recibir una lectura **solo la guarda**; NO llama a `/health-monitor/evaluate`. El ensemble se alimenta **solo por scripts de simulación** (`scripts/simulate_*.py`). En producción real la cadena `CR310 → iot ingest → ml evaluate → salud + incidencias` está **rota**. Ver `docs/spec-racionalizacion-dashboard-e-incidencias.md` §7. **Sin esto, el sistema no monitorea nada real.** |
+| C1 | **Ingesta IoT → dispara el ensemble** | ✅ HECHO (2026-07-04) | `iot-service` al persistir una lectura hace `POST` fire-and-forget a `ml-service /health-monitor/evaluate` (`ensemble_notify_service`), mapeando claves Thermo → features del ensemble. Flag `ENSEMBLE_NOTIFY_ENABLED`. La cadena `CR310 → iot ingest → ml evaluate → salud + incidencias` quedó cerrada. Verificado E2E. Tests en `test_ensemble_notify.py` (12). |
 | C2 | **Retiro físico total del RF** | ⚠️ Parcial | Backend RF desconectado y deprecado (no crea incidencias, endpoints `deprecated`). Falta borrar pipeline/modelo/tests RF en un PR dedicado. Ver spec-racionalizacion §3 R3. |
 
 ### Detección de transmisión y reentrenamiento (`docs/spec-transmision-y-reentrenamiento.md`)
@@ -21,9 +21,9 @@ están implementados y verificados; se listan para dar contexto.
 | # | Item | Estado | Notas |
 |---|---|---|---|
 | C3 | **Watchdog de pérdida de transmisión** | ✅ HECHO | Scheduler APScheduler cada 5 min; SIN_TRANSMISION baja/media/alta; silencia por incidencia abierta; limpia al reanudar. |
-| C4 | **Recalibración de θ automática (mensual)** | ❌ Pendiente | Script `09_recalibrate_theta.py` existe; falta engancharlo al scheduler (ya existe el scheduler). |
-| C5 | **Reentrenamiento completo del ensemble** | ❌ Pendiente | Trimestral o por degradación. Depende de C6 (métricas). Jobs pesados fuera del request-path. |
-| C6 | **Métricas de monitoreo del modelo persistidas** | ❌ Pendiente | Tasa de alerta / especificidad por estación en el tiempo. **Prerequisito de C5** (disparo por degradación). Hoy no se registran. |
+| C4 | **Recalibración de θ automática (mensual)** | ✅ HECHO (2026-07-04) | `theta_service` recalibra θ = P95(recon_error normal) desde `health_readings`; conserva θ_train; guarda de mínimo de lecturas; invalida el cache del registry (θ nuevo sin reiniciar); endpoint `/recalibrate-theta`; job mensual en scheduler (`THETA_RECAL_ENABLED`). Tests en `test_theta_service.py` (9). Verificado E2E. |
+| C5 | **Reentrenamiento completo del ensemble** | ✅ HECHO (2026-07-04) | `retrain_service.should_retrain` aplica los criterios de degradación (spec §2.3) desde `model_metrics` + θ drift; endpoint diagnóstico `/should-retrain`; `retrain_station` orquesta (opt-in `RETRAIN_ENABLED`, delega al pipeline batch, invalida cache); chequeo diario en scheduler (`RETRAIN_CHECK_ENABLED`). El entrenamiento pesado reusa el pipeline existente. Tests en `test_retrain_service.py` (11). Verificado E2E. |
+| C6 | **Métricas de monitoreo del modelo persistidas** | ✅ HECHO (2026-07-04) | Tabla `model_metrics` (migración ml_005); `metrics_service` agrega `health_readings` por estación/ventana (tasa de alerta, θ vigente); endpoints `/metrics` + `/run-metrics`; job diario en el scheduler (`METRICS_ENABLED`). Tests en `test_metrics_service.py` (7). Verificado E2E. |
 
 ### Regla de consolidación de alertas (`docs/regla-consolidacion-alertas.md`)
 
@@ -37,6 +37,7 @@ están implementados y verificados; se listan para dar contexto.
 |---|---|---|---|
 | C8 | **Onboarding automatizado de estación nueva** | ❌ Pendiente | Hoy 100% manual (correr scripts). Flujo auto: detectar → warm-up → entrenar → activar θ. Requiere scheduler (ya existe). |
 | C9 | **Silenciamiento por mantenimiento (ventana explícita)** | ⚠️ Parcial | Hoy se silencia por incidencia abierta. Falta un modo "en mantenimiento" con ventana temporal explícita si se requiere. |
+| C10 | **Validación de escala de sensores en ingesta** | ✅ HECHO (2026-07-05) | `ensemble_notify_service` valida que las 4 features caigan en el rango físico de la escala OEFA (`OEFA_RANGES`; discriminadores claros: flow>10 o lamp>300 = escala Thermo). Fuera de rango → `valido=0` → gate §3.0 → SIN_DATOS (fallback seguro), evitando el `recon_error`~1e9. NO convierte unidades (no se conoce la fórmula); rechaza limpiamente. Verificado E2E: lectura Thermo → SIN_DATOS; lectura OEFA → SANO normal. Tests: iot `test_ensemble_notify.py` (rechazo Thermo, aceptación OEFA, frontera, parcial, E2E) + ml `test_health_service.py` (defensa en profundidad: el ensemble sigue robusto). Ver `memory/project_c1_scale_bug.md`. |
 
 ---
 

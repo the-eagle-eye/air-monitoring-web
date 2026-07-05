@@ -79,3 +79,34 @@ class WatchdogRunResponse(BaseModel):
     silenced: list[str]
     ok: int
     ran_at: str
+
+
+class ModelMetricItem(BaseModel):
+    """Una fila de métrica del modelo (C6)."""
+
+    station_id: str
+    window_start: datetime
+    window_end: datetime
+    total_readings: int
+    anomaly_readings: int
+    alert_rate: float
+    theta: float | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class ModelMetricsResponse(BaseModel):
+    items: list[ModelMetricItem]
+
+
+class MetricsRunResponse(BaseModel):
+    computed: int
+    stations: list[dict]
+
+
+class ThetaRecalResponse(BaseModel):
+    results: list[dict]
+
+
+class RetrainCheckResponse(BaseModel):
+    results: list[dict]

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.models.equipo import Equipo
 from app.models.lectura_iot import LecturaIoT
 from app.schemas.lectura_iot import LecturaIoTCreate
+from app.services.ensemble_notify_service import notify_ensemble
 
 PERU_TZ = timezone(timedelta(hours=-5))
 
@@ -34,5 +35,8 @@ def validate_and_store_reading(db: Session, payload: LecturaIoTCreate) -> Lectur
     db.add(lectura)
     db.commit()
     db.refresh(lectura)
+
+    # C1: notificar al ensemble de salud (fire-and-forget; no rompe la ingesta).
+    notify_ensemble(payload.equipo, timestamp_lectura, payload.sensors)
 
     return lectura

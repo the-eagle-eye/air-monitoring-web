@@ -7,11 +7,20 @@ from app.schemas.health import (
     HealthEvaluateRequest,
     HealthEvaluateResponse,
     HealthReadingsResponse,
+    MetricsRunResponse,
+    ModelMetricsResponse,
     NoTransmissionResponse,
+    RetrainCheckResponse,
+    ThetaRecalResponse,
     WatchdogRunResponse,
 )
 from app.services.health_service import evaluate, get_device_state, get_readings
-from app.services import watchdog_service
+from app.services import (
+    metrics_service,
+    retrain_service,
+    theta_service,
+    watchdog_service,
+)
 
 router = APIRouter()
 
@@ -82,3 +91,33 @@ def run_watchdog_now(db: Session = Depends(get_db)):
     """Ejecuta el watchdog on-demand (debug / cron externo). El scheduler ya lo
     corre cada 5 min automáticamente."""
     return watchdog_service.run_watchdog(db)
+
+
+@router.get("/metrics", response_model=ModelMetricsResponse)
+def model_metrics(device_id: str | None = None, limit: int = 100,
+                  db: Session = Depends(get_db)):
+    """Serie histórica de métricas del modelo (C6) por estación."""
+    rows = metrics_service.get_metrics(db, device_id, limit)
+    return {"items": rows}
+
+
+@router.post("/run-metrics", response_model=MetricsRunResponse)
+def run_metrics_now(db: Session = Depends(get_db)):
+    """Calcula y persiste las métricas del modelo on-demand. El scheduler ya las
+    corre a diario."""
+    stations = metrics_service.compute_and_store_metrics(db)
+    return {"computed": len(stations), "stations": stations}
+
+
+@router.post("/recalibrate-theta", response_model=ThetaRecalResponse)
+def recalibrate_theta_now(db: Session = Depends(get_db)):
+    """Recalibra θ de todas las estaciones desde la BD (C4) on-demand. El
+    scheduler ya lo corre mensualmente."""
+    return {"results": theta_service.recalibrate_all(db)}
+
+
+@router.get("/should-retrain", response_model=RetrainCheckResponse)
+def should_retrain_check(db: Session = Depends(get_db)):
+    """Diagnóstico C5: evalúa criterios de degradación por estación (spec §2.3)
+    sin disparar reentrenamiento. Devuelve qué estaciones lo necesitarían."""
+    return {"results": retrain_service.evaluate_all(db)}

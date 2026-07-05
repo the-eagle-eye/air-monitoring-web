@@ -2,16 +2,28 @@
 """
 Job nocturno de simulación de flota — CA-ILO-01, CA-UCHU-01, CA-CH-04, CA-CH-05.
 
-Cada `--interval` segundos (5 min por defecto) envía, POR CADA equipo:
-  1. POST /iot/readings          -> persiste una lectura_iot (payload CR310, como
-                                    lo haría un equipo real en campo).
-  2. POST /health-monitor/evaluate -> alimenta el ensemble de salud (recon_error,
-                                    IsolationForest, AND) y actualiza el estado que
-                                    ve el dashboard.
+Cada `--interval` segundos (5 min por defecto) envía, POR CADA equipo, UNA lectura
+a `POST /iot/readings` — exactamente como lo haría un datalogger real en campo.
 
-Puentea el GAP C1 (iot-service NO dispara el ensemble al ingerir) desde el cliente:
-mandamos ambos endpoints con estados COHERENTES entre sí (misma "salud" en la
-lectura CR310 y en la evaluación de salud).
+Desde que se cerró el GAP C1, iot-service dispara el ensemble de salud
+(AE+IF+AND) automáticamente al persistir la lectura (ensemble_notify_service),
+así que NO llamamos a /health-monitor/evaluate: la cadena
+`lectura → iot ingest → ml evaluate → salud/incidencias` corre sola.
+
+ESCALA — importante:
+Estas 4 estaciones OEFA operan en la MISMA escala con la que se entrenó el
+ensemble (SO2 ppb ~1-9, flow ~0.45, temp interna ~30, lámpara ~102). NO es la
+escala Thermo/CR310 de los equipos T101… (ppb negativos, flow ~600, lamp ~1940).
+Enviar escala Thermo a estas estaciones dispara recon_error astronómico → CRITICO
+falso. Por eso los valores de abajo están en escala OEFA, calibrados por equipo
+contra su propio θ (fuente: scripts/simulate_multi_random.py, simulate_ca_ch_05.py).
+
+C1 mapea estas claves del payload -> features del ensemble:
+    SO2_ppb          -> so2_ppb
+    SampleFlow       -> so2_flow
+    Reaction_Temp    -> so2_internal_temp
+    UVLampIntensity  -> so2_lamp_int
+Las 4 deben venir numéricas o el gate marca SIN_DATOS (valido=0).
 
 Comportamiento "mayormente sano + eventos":
   - La flota emite SANO la mayor parte de la noche.
@@ -21,14 +33,14 @@ Comportamiento "mayormente sano + eventos":
     N_CONSEC=3 lecturas estables, que se emiten dentro del mismo ciclo.
 
 Termina automáticamente a las 08:00 (hora Perú, UTC-5) del día siguiente, o antes
-si se interrumpe con Ctrl-C.
+si se interrumpe con Ctrl-C / SIGTERM.
 
 Uso:
     python scripts/nightly_fleet_job.py
     python scripts/nightly_fleet_job.py --interval 300 --event-prob 0.15
     python scripts/nightly_fleet_job.py --stop "2026-07-05 08:00" --url http://localhost:8000
 
-Requiere: httpx. Servicios levantados (docker compose up).
+Requiere: httpx. Servicios levantados (docker compose up) con ENSEMBLE_NOTIFY_ENABLED=1.
 """
 from __future__ import annotations
 
@@ -47,11 +59,11 @@ N_CONSEC = 3  # lecturas para confirmar anti-parpadeo (§5.1)
 SEVERITY = {"SANO": 0, "EN_RIESGO": 2, "CRITICO": 3}
 
 # ---------------------------------------------------------------------------
-# Valores calibrados para el ENSEMBLE (/health-monitor/evaluate).
-# (so2_ppb, so2_flow, so2_internal_temp, so2_lamp_int) — calibrados contra el θ
-# de cada equipo. Fuente: scripts/simulate_multi_random.py y simulate_ca_ch_05.py.
+# Valores calibrados en ESCALA OEFA por equipo y estado.
+# Claves = nombres que C1 (ensemble_notify_service) mapea a las features del
+# ensemble. Tupla = (SO2_ppb, SampleFlow, Reaction_Temp, UVLampIntensity).
 # ---------------------------------------------------------------------------
-ENSEMBLE_VALUES = {
+FLEET = {
     "CA-ILO-01": {
         "SANO":      (4.91, 0.421, 30.65, 93.38),
         "EN_RIESGO": (6.81, 0.37, 34.45, 91.48),
@@ -73,48 +85,15 @@ ENSEMBLE_VALUES = {
         "CRITICO":   (9.34, 0.38, 38.09, 98.54),
     },
 }
-DEVICES = list(ENSEMBLE_VALUES.keys())
-
-# ---------------------------------------------------------------------------
-# Rangos CR310 para la LECTURA persistida (/iot/readings), por estado.
-# Escala real (T101): ppb negativos, flow ~600, lamp ~1940. SANO = baselines
-# reales; EN_RIESGO/CRITICO degradan lámpara UV y suben temperaturas (patrón de
-# degradación físico observado en la bitácora).
-# ---------------------------------------------------------------------------
-CR310_VALUES = {
-    "SANO": {
-        "SO2_ppb": (-2.2, -1.3), "H2S_ppb": (-1.4, -0.3),
-        "Reaction_Temp": (49.7, 50.1), "IZS_Temp": (0.0, 0.0),
-        "PMT_Temp": (8.5, 10.0), "SampleFlow": (590.0, 640.0),
-        "Pressure": (17.2, 18.5), "UVLampIntensity": (1930.0, 1955.0),
-        "Box_Temp": (33.9, 35.3), "HVPS_V": (643.0, 648.0),
-        "Conv_Temp": (312.0, 314.0), "Ozone_flow": (0.0, 0.0),
-    },
-    "EN_RIESGO": {
-        "SO2_ppb": (-1.0, 0.5), "H2S_ppb": (-0.3, 0.8),
-        "Reaction_Temp": (50.1, 50.6), "IZS_Temp": (0.0, 0.0),
-        "PMT_Temp": (10.0, 12.0), "SampleFlow": (560.0, 590.0),
-        "Pressure": (16.8, 17.2), "UVLampIntensity": (1870.0, 1910.0),
-        "Box_Temp": (35.3, 37.0), "HVPS_V": (640.0, 643.0),
-        "Conv_Temp": (309.0, 312.0), "Ozone_flow": (0.0, 0.0),
-    },
-    "CRITICO": {
-        "SO2_ppb": (0.5, 2.5), "H2S_ppb": (0.8, 2.0),
-        "Reaction_Temp": (50.6, 51.5), "IZS_Temp": (0.0, 0.0),
-        "PMT_Temp": (12.0, 15.0), "SampleFlow": (520.0, 560.0),
-        "Pressure": (16.2, 16.8), "UVLampIntensity": (1800.0, 1860.0),
-        "Box_Temp": (37.0, 39.5), "HVPS_V": (636.0, 640.0),
-        "Conv_Temp": (305.0, 309.0), "Ozone_flow": (0.0, 0.0),
-    },
-}
+DEVICES = list(FLEET.keys())
 
 _stop = False
 
 
-def _handle_sigint(signum, frame):
+def _handle_signal(signum, frame):
     global _stop
     _stop = True
-    print("\n[!] Señal recibida — terminando tras el ciclo actual...", flush=True)
+    print("\n[!] Señal recibida — terminando tras el equipo actual...", flush=True)
 
 
 def login(client: httpx.Client, base: str) -> str:
@@ -123,65 +102,53 @@ def login(client: httpx.Client, base: str) -> str:
     return r.json()["access_token"]
 
 
-def _cr310_payload(device: str, state: str, ts: datetime, rng: random.Random) -> dict:
-    payload = {"equipo": device, "timestamp": ts.strftime("%Y-%m-%d %H:%M:%S")}
-    for field, (low, high) in CR310_VALUES[state].items():
-        payload[field] = low if low == high else round(rng.uniform(low, high), 2)
-    return payload
-
-
-def _ensemble_payload(device: str, state: str, ts: datetime) -> dict:
-    ppb, flow, temp, lamp = ENSEMBLE_VALUES[device][state]
+def _payload(device: str, state: str, ts_peru: datetime, rng: random.Random) -> dict:
+    """Lectura CR310-style en escala OEFA, con pequeño jitter para que no sea plana."""
+    ppb, flow, temp, lamp = FLEET[device][state]
+    j = lambda v, s: round(rng.gauss(v, s), 4)  # noqa: E731
     return {
-        "device_id": device,
-        "timestamp": ts.isoformat(),
-        "so2_ppb": ppb, "so2_flow": flow,
-        "so2_internal_temp": temp, "so2_lamp_int": lamp,
-        "valido": 1,
+        "equipo": device,
+        "timestamp": ts_peru.strftime("%Y-%m-%d %H:%M:%S"),
+        "SO2_ppb": j(ppb, 0.03),
+        "SampleFlow": j(flow, 0.003),
+        "Reaction_Temp": j(temp, 0.15),
+        "UVLampIntensity": j(lamp, 0.08),
     }
 
 
-def send_reading(client, base, token, device, state, rng):
-    """Envía a AMBOS endpoints una lectura coherente. Devuelve (ok_iot, evaluate_json)."""
-    now = datetime.now(timezone.utc)
-    headers = {"Authorization": f"Bearer {token}"}
-
-    # 1) Ingesta IoT (lectura_iot). Timestamp en hora Perú (ingestion espera naive local).
-    ts_peru = now.astimezone(PERU_TZ)
-    ok_iot = False
+def send_reading(client, base, token, device, state, rng) -> bool:
+    """POST /iot/readings. C1 dispara el ensemble solo. Devuelve True si persistió."""
+    ts_peru = datetime.now(PERU_TZ)
     try:
         r = client.post(f"{base}/api/v1/iot/readings",
-                        json=_cr310_payload(device, state, ts_peru, rng),
-                        headers=headers, timeout=15)
-        ok_iot = r.status_code in (200, 201)
-        if not ok_iot:
-            print(f"    [iot ERR {r.status_code}] {r.text[:150]}", flush=True)
+                        json=_payload(device, state, ts_peru, rng),
+                        headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        if r.status_code in (200, 201):
+            return True
+        print(f"    [ERR {r.status_code}] {device}: {r.text[:150]}", flush=True)
     except httpx.RequestError as e:
-        print(f"    [iot CONN ERR] {e}", flush=True)
-
-    # 2) Ensemble de salud.
-    out = None
-    try:
-        r = client.post(f"{base}/api/v1/health-monitor/evaluate",
-                        json=_ensemble_payload(device, state, now),
-                        headers=headers, timeout=15)
-        if r.status_code == 200:
-            out = r.json()
-        else:
-            print(f"    [eval ERR {r.status_code}] {r.text[:150]}", flush=True)
-    except httpx.RequestError as e:
-        print(f"    [eval CONN ERR] {e}", flush=True)
-
-    return ok_iot, out
+        print(f"    [CONN ERR] {device}: {e}", flush=True)
+    return False
 
 
 def _reps_for(target: str, current: str) -> int:
-    """Anti-parpadeo: subir a CRITICO = 1; resto de transiciones = N_CONSEC."""
+    """Anti-parpadeo: subir a CRITICO = 1 lectura; resto de transiciones = N_CONSEC."""
     if target == current:
         return 1
     if target == "CRITICO" and SEVERITY[target] > SEVERITY[current]:
         return 1
     return N_CONSEC
+
+
+def get_state(client, base, token, device) -> str | None:
+    try:
+        r = client.get(f"{base}/api/v1/health-monitor/{device}/state",
+                       headers={"Authorization": f"Bearer {token}"}, timeout=15)
+        if r.status_code == 200:
+            return r.json().get("health_state")
+    except httpx.RequestError:
+        pass
+    return None
 
 
 def parse_stop(value: str | None) -> datetime:
@@ -208,8 +175,8 @@ def main():
 
     rng = random.Random(args.seed)
     stop_utc = parse_stop(args.stop)
-    signal.signal(signal.SIGINT, _handle_sigint)
-    signal.signal(signal.SIGTERM, _handle_sigint)
+    signal.signal(signal.SIGINT, _handle_signal)
+    signal.signal(signal.SIGTERM, _handle_signal)
 
     now_peru = datetime.now(PERU_TZ)
     stop_peru = stop_utc.astimezone(PERU_TZ)
@@ -217,7 +184,7 @@ def main():
     print(" JOB NOCTURNO — SIMULACIÓN DE FLOTA DE MONITOREO DE AIRE")
     print("=" * 68)
     print(f" Equipos     : {', '.join(DEVICES)}")
-    print(f" Endpoints   : /iot/readings + /health-monitor/evaluate")
+    print(f" Endpoint    : POST /iot/readings  (C1 dispara el ensemble solo)")
     print(f" Intervalo   : {args.interval:.0f}s   Prob. evento/ciclo: {args.event_prob}")
     print(f" Inicio      : {now_peru:%Y-%m-%d %H:%M:%S} (Perú)")
     print(f" Parada      : {stop_peru:%Y-%m-%d %H:%M:%S} (Perú)")
@@ -231,14 +198,15 @@ def main():
             print(f"[FATAL] No se pudo autenticar en {args.url}: {e}", file=sys.stderr)
             sys.exit(1)
 
-        current = {d: "SANO" for d in DEVICES}
+        # Estado publicado real (lo consultamos, no lo asumimos) para respetar
+        # el anti-parpadeo con exactitud.
+        current = {d: (get_state(client, args.url, token, d) or "SANO") for d in DEVICES}
         token_ts = time.monotonic()
         cycle = 0
 
         while not _stop and datetime.now(timezone.utc) < stop_utc:
             cycle += 1
-            # Refrescar token cada ~20 min por si el access_token caduca.
-            if time.monotonic() - token_ts > 1200:
+            if time.monotonic() - token_ts > 1200:  # refrescar token cada ~20 min
                 try:
                     token = login(client, args.url)
                     token_ts = time.monotonic()
@@ -257,29 +225,21 @@ def main():
             print(f"[c{cycle:04d} {hora}] {tag}", flush=True)
 
             for device in DEVICES:
+                if _stop:
+                    break
                 target = targets[device]
                 reps = _reps_for(target, current[device])
-                out = None
-                iot_ok_any = False
+                ok = False
                 for _ in range(reps):
-                    iot_ok, out = send_reading(client, args.url, token, device, target, rng)
-                    iot_ok_any = iot_ok_any or iot_ok
+                    ok = send_reading(client, args.url, token, device, target, rng) or ok
                     if reps > 1:
                         time.sleep(1)
-                if out is not None:
-                    current[device] = out["health_state"]
-                    err = out.get("recon_error")
-                    err_s = f"{err:.3f}" if err is not None else "—"
-                    iot_s = "ok" if iot_ok_any else "FAIL"
-                    print(f"    {device:12s} target={target:9s} "
-                          f"-> {out['health_state']:12s} err={err_s:>8s} iot={iot_s}",
-                          flush=True)
-                else:
-                    print(f"    {device:12s} target={target:9s} -> [sin respuesta ensemble]",
-                          flush=True)
+                published = get_state(client, args.url, token, device) or current[device]
+                current[device] = published
+                print(f"    {device:12s} target={target:9s} -> {published:12s} "
+                      f"iot={'ok' if ok else 'FAIL'}", flush=True)
 
-            # Dormir hasta el próximo ciclo, en tramos cortos para reaccionar a Ctrl-C
-            # y no pasarnos de la hora de parada.
+            # Dormir en tramos cortos para reaccionar a Ctrl-C y a la hora de parada.
             slept = 0.0
             while (slept < args.interval and not _stop
                    and datetime.now(timezone.utc) < stop_utc):

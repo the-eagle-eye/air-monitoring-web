@@ -137,6 +137,15 @@ class EnsembleRegistry:
         self._cache[station_id] = bundle
         return bundle
 
+    def invalidate(self, station_id: str | None = None):
+        """Descarta el bundle cacheado para que la próxima lectura recargue los
+        artefactos desde disco (p.ej. tras recalibrar θ o reentrenar).
+        Sin argumento, invalida todas las estaciones."""
+        if station_id is None:
+            self._cache.clear()
+        else:
+            self._cache.pop(station_id, None)
+
 
 registry = EnsembleRegistry()
 

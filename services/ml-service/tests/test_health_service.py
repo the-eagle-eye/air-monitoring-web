@@ -115,6 +115,47 @@ def test_error_alto_pero_if_normal_no_alerta(db_session, bundle_factory):
     assert out["and_alert"] is False
 
 
+# --------------------------------------------------------------------------
+# Bug de escala C10 (memory/project_c1_scale_bug.md)
+# Una lectura en escala equivocada (Thermo enviada a estación OEFA) produce un
+# recon_error absurdo (~1e9). Estos tests documentan que el RESULTADO lo decide
+# el AND, NO la magnitud del recon:
+#   - recon gigante + IF normal  -> SANO (el equipo roto queda ENMASCARADO)
+#   - recon gigante + IF anómalo -> CRITICO
+# Es el hallazgo clave: un recon_error enorme NO garantiza detección.
+# --------------------------------------------------------------------------
+def test_escala_recon_gigante_if_normal_queda_sano(db_session, bundle_factory):
+    # simula la lectura Thermo-a-OEFA: recon ~1.28e9 pero el IF (entrenado en
+    # escala OEFA) clasifica el punto extremo como normal -> AND bloquea -> SANO
+    bundle_factory("DEV1", recon_error=1.28e9, if_anomaly=False, theta=0.39)
+    out = hs.evaluate(db_session, _req("DEV1"))
+    assert out["recon_error"] > 1e8          # el recon SÍ explota
+    assert out["and_alert"] is False          # pero el AND lo bloquea
+    assert out["health_state"] == "SANO"      # riesgo: equipo roto enmascarado
+
+
+def test_escala_recon_gigante_if_anomalo_es_critico(db_session, bundle_factory):
+    # si el IF SÍ marca anomalía, el recon gigante -> CRITICO (>3θ)
+    theta = bundle_factory("DEV1", recon_error=1.28e9, if_anomaly=True, theta=0.39)
+    # subir a CRITICO es inmediato (anti-parpadeo §5.1), no requiere N_CONSEC
+    out = hs.evaluate(db_session, _req("DEV1"))
+    assert out["and_alert"] is True
+    assert out["health_state"] == "CRITICO"
+
+
+def test_escala_causa_raiz_scaler_amplifica_fuera_de_escala():
+    """Causa raíz del bug C10: un StandardScaler ajustado a escala OEFA
+    transforma un valor en escala Thermo a decenas de miles de σ. Determinista,
+    sin depender de los .pkl reales."""
+    from sklearn.preprocessing import StandardScaler
+    # SampleFlow OEFA ~0.45 con ruido pequeño (escala real de entrenamiento)
+    oefa_flow = np.array([[0.44], [0.45], [0.46], [0.45], [0.44]], dtype=float)
+    scaler = StandardScaler().fit(oefa_flow)
+    # un flow en escala Thermo (~600) cae a miles de σ
+    z = scaler.transform([[600.0]])[0][0]
+    assert abs(z) > 1000  # amplificación extrema -> recon del AE explota
+
+
 def _evaluate_stabilized(db_session, device):
     """Evalúa N_CONSEC lecturas para superar el anti-parpadeo (§5.1) y devuelve
     la última salida (el estado ya confirmado/publicado)."""

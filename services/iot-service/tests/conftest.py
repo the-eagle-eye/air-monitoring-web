@@ -1,3 +1,9 @@
+import os
+
+# C1: apagar la notificación al ensemble en tests (no acoplar la ingesta a la red).
+# Los tests que la ejercitan la re-activan explícitamente con monkeypatch.
+os.environ.setdefault("ENSEMBLE_NOTIFY_ENABLED", "0")
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker

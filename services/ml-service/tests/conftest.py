@@ -1,8 +1,11 @@
 import os
 
-# Apagar el scheduler del watchdog en tests (no arrancar hilos de fondo).
+# Apagar el scheduler en tests (no arrancar hilos de fondo).
 # Debe fijarse ANTES de importar app.main / app.scheduler.
 os.environ.setdefault("WATCHDOG_ENABLED", "0")
+os.environ.setdefault("METRICS_ENABLED", "0")
+os.environ.setdefault("THETA_RECAL_ENABLED", "0")
+os.environ.setdefault("RETRAIN_CHECK_ENABLED", "0")
 
 import pytest
 from sqlalchemy import create_engine, event
@@ -14,6 +17,7 @@ from shared.models.base import Base
 from app.models.prediccion import Prediccion  # noqa: F401
 from app.models.alerta import Alerta  # noqa: F401
 from app.models.health_state import HealthReading, HealthDeviceState  # noqa: F401
+from app.models.model_metric import ModelMetric  # noqa: F401
 from app.main import app
 from app.database import get_db
 
