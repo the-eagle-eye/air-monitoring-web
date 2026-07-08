@@ -16,6 +16,9 @@ venv/
 # ML artifacts (large binary model files)
 *.pkl
 *.joblib
+# EXCEPCIÓN: los modelos del ensemble ACTIVO sí se versionan (12MB, sklearn).
+# Permiten que quien clone vea el monitor funcionando sin pasar archivos por fuera.
+!services/ml-service/ml_artifacts_ensemble_v1/*.pkl
 # ML artifact backups
 ml_artifacts_backup_*/
 

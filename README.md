@@ -24,7 +24,7 @@ PostgreSQL (:5432)
 |------|-----------|
 | Frontend | React, Next.js, TypeScript, TailwindCSS, Recharts |
 | Backend | Python 3.x, FastAPI |
-| ML | scikit-learn (Random Forest), pandas, numpy, joblib |
+| ML | scikit-learn (ensemble no supervisado: Autoencoder + Isolation Forest), pandas, numpy, joblib |
 | Base de datos | PostgreSQL 15 |
 | Contenedores | Docker, Docker Compose |
 | CI/CD | GitHub Actions |
@@ -40,24 +40,44 @@ PostgreSQL (:5432)
 ### Con Docker Compose (recomendado)
 
 ```bash
-# Clonar el repositorio
+# 1. Clonar el repositorio
 git clone https://github.com/the-eagle-eye/air-monitoring-web.git
 cd air-monitoring-web
 
-# Copiar variables de entorno
+# 2. Copiar variables de entorno
 cp .env.example .env
 
-# Levantar todos los servicios
+# 3. Levantar todos los servicios (migraciones + seed corren solas al arrancar)
 docker compose up --build
+#    Espera a que los 5 servicios esten "healthy".
+
+# 4. Poblar el dashboard con actividad (lecturas -> ensemble -> salud/incidencias)
+#    En otra terminal, con los contenedores arriba:
+python scripts/simulate_multi_random.py --cycles 8 --interval 30
 ```
 
 Servicios disponibles:
 
-- Frontend: http://localhost:3000
+- Frontend: http://localhost:3000  (login: `admin@oefa.gob.pe` / `admin123`)
 - API Gateway: http://localhost:8000
 - IoT Service: http://localhost:8001
 - ML Service: http://localhost:8002
 - Ops Service: http://localhost:8003
+
+> **Modelos del ensemble ya incluidos.** Los artefactos entrenados del monitor de
+> salud (ensemble Autoencoder + Isolation Forest por estacion) estan versionados en
+> `services/ml-service/ml_artifacts_ensemble_v1/` (5 estaciones: CA-CC-01, CA-CH-04,
+> CA-CH-05, CA-ILO-01, CA-UCHU-01). No hay que entrenarlos ni pasar archivos por fuera:
+> con `docker compose up` el ml-service los toma via bind-mount y el monitor funciona.
+>
+> **Orden importa:** los modelos deben estar presentes ANTES de levantar el ml-service
+> (el registry cachea "sin modelo"). Si haces `git pull` con el servicio ya corriendo,
+> reinicia el ml-service: `docker compose restart ml-service`.
+>
+> **Datos de demo:** la base arranca con el seed de migraciones (usuarios, repuestos,
+> equipos). El paso 4 (`simulate_multi_random.py`) genera lecturas que pasan por el
+> ensemble y pueblan salud/incidencias/tendencias — es lo que da vida al dashboard.
+> Un equipo sin modelo entrenado se muestra como `SIN_DATOS` (comportamiento esperado).
 
 ### Desarrollo Local (sin Docker)
 
@@ -104,15 +124,31 @@ air_monitoring_project/
 
 ## Modelo ML
 
-- **Algoritmo:** Random Forest (Regresor para RUL + Clasificador para probabilidad de falla)
-- **Features:** 122 features derivadas de 12 sensores con ventanas temporales (1h, 6h, 24h)
-- __Output:__ `failure_probability` (0-1), `remaining_useful_life_days` (int), `risk_level` (low/medium/high)
+Monitor de salud basado en un **ensemble no supervisado por estacion**: Autoencoder
+(error de reconstruccion vs umbral θ) + Isolation Forest, unidos por una compuerta
+**AND** (alerta solo si ambos detectores coinciden → evita falsos positivos).
 
-### Entrenar el modelo
+- **Salida:** estado de salud `SANO / OBSERVADO / EN_RIESGO / CRITICO / SIN_DATOS`
+  por equipo (endpoint `/api/v1/health-monitor`).
+- **Por estacion:** cada equipo tiene su propio modelo y su θ (aprende su "normalidad").
+  Un equipo sin modelo entrenado se reporta `SIN_DATOS` (fallback seguro, no alerta).
+- **Artefactos versionados** en `services/ml-service/ml_artifacts_ensemble_v1/`
+  (`scaler_<id>.pkl`, `autoencoder_<id>.pkl`, `iforest_<id>.pkl`, `theta_<id>.json`).
+
+> El modelo Random Forest original (RUL / probabilidad de falla) fue retirado; ver
+> `docs/spec-racionalizacion-dashboard-e-incidencias.md`.
+
+### Entrenar / re-entrenar (offline, opcional)
+
+Los modelos ya vienen versionados. Para re-entrenarlos se necesita el dataset historico
+por estacion (no versionado) y el pipeline offline:
 
 ```bash
 cd services/ml-service
-PYTHONPATH=../.. python -m app.ml.train_model --output-dir ml_artifacts
+python scripts/ensemble/01_build_dataset.py     # lee CSV historicos por estacion
+python scripts/ensemble/02_train_autoencoder.py # -> autoencoder + theta
+python scripts/ensemble/03_train_iforest.py     # -> iforest
+# resultado: los .pkl/.json en ml_artifacts_ensemble_v1/
 ```
 
 ## Tests
@@ -130,11 +166,17 @@ cd services/ops-service && PYTHONPATH=../.. python -m pytest tests/ -v
 
 ## Reglas de Negocio
 
-- **RUL <= 30 dias** -> Alerta alta
-- **RUL 31-60 dias** -> Alerta media
-- **RUL > 60 dias** -> Monitoreo normal
-- **>= 2 alertas altas/dia mismo equipo** -> Incidencia correctiva automatica
-- **Incidencia correctiva finalizada** -> Auto-crea incidencia de calibracion
+- **Anomalia confirmada por el ensemble** (AE supera θ **y** Isolation Forest coincide)
+  -> se grada la severidad `OBSERVADO / EN_RIESGO / CRITICO`.
+- **Regla de consolidacion** (ventana 24h): `OBSERVADO >= 5`, `EN_RIESGO >= 3`,
+  `CRITICO >= 1` -> crea/escala una **incidencia correctiva** (un incidente abierto por
+  equipo; escala prioridad, no duplica).
+- **Prioridad** = matriz **impacto** (criticidad del equipo) x **urgencia** (severidad).
+- **Incidencia correctiva finalizada** -> auto-crea incidencia de calibracion.
+- **Ventana de mantenimiento (C9):** equipo con correctiva `en_ejecucion` -> el monitor
+  silencia (no crea ni escala) hasta el cierre.
+- **Gestion ITIL v4:** ciclo de vida de incidentes + Problemas (causa raiz). Ver
+  `docs/flujo-itil-v4.md`.
 
 ## API
 
