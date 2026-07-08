@@ -25,7 +25,6 @@ services:
       - DATABASE_URL=postgresql://airmon:airmon123@db:5432/airmonitoring
       - IOT_SERVICE_URL=http://iot-service:8001
       - ML_SERVICE_URL=http://ml-service:8002
-      - ML_ISOLATION_SERVICE_URL=http://ml-service-isolation:8004
       - ML_BACKEND=${ML_BACKEND:-legacy}
       - OPS_SERVICE_URL=http://ops-service:8003
       - SECRET_KEY=dev-secret-key-change-in-production
@@ -81,28 +80,6 @@ services:
       - ./services/ml-service/migrations:/app/migrations
       - ./services/ml-service/alembic.ini:/app/alembic.ini
       - ./services/ml-service/tests:/app/tests
-
-  ml-service-isolation:
-    build:
-      context: .
-      dockerfile: services/ml-service-isolation/Dockerfile
-    ports:
-      - "8004:8004"
-    environment:
-      - DATABASE_URL=postgresql://airmon:airmon123@db:5432/airmonitoring
-      - IOT_SERVICE_URL=http://iot-service:8001
-      - OPS_SERVICE_URL=http://ops-service:8003
-      - ML_ARTIFACTS_V3_PATH=/app/ml_artifacts_v3
-    depends_on:
-      db:
-        condition: service_healthy
-    volumes:
-      - ./shared:/app/shared
-      - ./services/ml-service-isolation/app:/app/app
-      - ./services/ml-service-isolation/ml_artifacts_v3:/app/ml_artifacts_v3
-      - ./services/ml-service-isolation/migrations:/app/migrations
-      - ./services/ml-service-isolation/alembic.ini:/app/alembic.ini
-      - ./services/ml-service-isolation/tests:/app/tests
 
   ops-service:
     build:

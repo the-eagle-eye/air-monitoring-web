@@ -87,3 +87,21 @@ services/ml-service-isolation/
 services/ml-service/scripts/v2/
 services/ml-service/scripts/v2_1/
 services/ml-service/scripts/health_monitor_poc/
+
+# --- Terraform / Despliegue AWS (NUNCA commitear estado ni secretos) ---
+# Estado de Terraform (puede contener secretos en texto plano)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+# Variables con secretos (db_password, secret_key, credenciales SMTP)
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+# Entorno de producción generado en la EC2 / local
+.env.prod
+secrets.local*
+# Bundle de código subido a S3 para el deploy (repo privado)
+airmon-app-bundle.tar.gz

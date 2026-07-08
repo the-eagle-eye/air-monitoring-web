@@ -1,0 +1,67 @@
+#!/bin/bash
+set -euxo pipefail
+# Deploy automático de Air Monitoring en la EC2 (llamado por Terraform).
+# El repo es PRIVADO: NO se clona. Se baja un bundle del código desde S3
+# (subido con `git archive`), se leen secretos de SSM, se bajan los artefactos
+# del ensemble y se levanta el stack con docker-compose.prod.yml.
+# Logs en /var/log/airmon-deploy.log
+exec > >(tee -a /var/log/airmon-deploy.log) 2>&1
+
+REGION="${region}"
+CODE_BUNDLE_KEY="${code_bundle_key}"
+RDS_HOST="${rds_host}"
+S3_BUCKET="${s3_bucket}"
+PUBLIC_HOST="${public_host}"
+APP_DIR=/home/ec2-user/air-monitoring-web
+
+# 1) Docker + compose plugin
+dnf update -y
+dnf install -y docker tar gzip
+systemctl enable --now docker
+usermod -aG docker ec2-user
+mkdir -p /usr/local/lib/docker/cli-plugins
+curl -sL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+
+# 2) Resolver el host público (para las URLs del frontend). Si no se pasó
+#    public_host, usar la IP pública de la instancia (IMDSv2).
+if [ -z "$PUBLIC_HOST" ]; then
+  TOKEN=$(curl -sX PUT "http://169.254.169.254/latest/api/token" \
+    -H "X-aws-ec2-metadata-token-ttl-seconds: 300")
+  PUBLIC_HOST=$(curl -s -H "X-aws-ec2-metadata-token: $TOKEN" \
+    http://169.254.169.254/latest/meta-data/public-ipv4)
+fi
+
+# 3) Bajar el BUNDLE de código desde S3 (repo privado; rol IAM, sin git creds)
+mkdir -p "$APP_DIR"
+aws s3 cp "s3://$S3_BUCKET/$CODE_BUNDLE_KEY" /tmp/app-bundle.tar.gz --region "$REGION"
+tar -xzf /tmp/app-bundle.tar.gz -C "$APP_DIR"
+cd "$APP_DIR"
+
+# 4) Descargar artefactos del ensemble desde S3 (gitignored; no van en el bundle)
+aws s3 sync "s3://$S3_BUCKET/ensemble/" \
+  services/ml-service/ml_artifacts_ensemble_v1/ --region "$REGION"
+
+# 5) Leer secretos de SSM
+get_ssm() { aws ssm get-parameter --name "$1" --with-decryption \
+  --query Parameter.Value --output text --region "$REGION"; }
+DB_PASSWORD=$(get_ssm /airmon/db_password)
+SECRET_KEY=$(get_ssm /airmon/secret_key)
+SMTP_USER=$(get_ssm /airmon/smtp_user)
+SMTP_PASSWORD=$(get_ssm /airmon/smtp_password)
+
+# 6) Componer el entorno para docker-compose.prod.yml
+cat > .env.prod <<ENV
+DATABASE_URL=postgresql://airmon:$${DB_PASSWORD}@$${RDS_HOST}:5432/airmonitoring
+SECRET_KEY=$${SECRET_KEY}
+SMTP_USER=$${SMTP_USER}
+SMTP_PASSWORD=$${SMTP_PASSWORD}
+FRONTEND_URL=http://$${PUBLIC_HOST}:3000
+PUBLIC_API_URL=http://$${PUBLIC_HOST}:8000
+ENV
+
+# 7) Levantar el stack (build incluido). Las migraciones alembic corren al
+#    arrancar cada servicio contra RDS.
+chown -R ec2-user:ec2-user "$APP_DIR"
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build

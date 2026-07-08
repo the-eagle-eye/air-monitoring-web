@@ -1,0 +1,23 @@
+# Copia este archivo a terraform.tfvars y rellena con TUS valores.
+# terraform.tfvars está en .gitignore (contiene secretos) — NUNCA lo commitees.
+#
+#   cp terraform.tfvars.example terraform.tfvars
+#   # edita terraform.tfvars con valores reales
+#   AWS_PROFILE=airmon_v2 tofu plan
+
+# Secretos — ROTAR antes de producción (no reutilizar los de dev):
+db_password   = "CAMBIA-genera-uno-fuerte"        # openssl rand -base64 24
+secret_key    = "CAMBIA-genera-uno-fuerte"        # openssl rand -hex 32  (firma JWT)
+smtp_user     = "TU-USUARIO-MAILTRAP"
+smtp_password = "TU-PASSWORD-MAILTRAP"
+
+# Acceso:
+ssh_public_key = "ssh-ed25519 AAAA... tu-llave-publica"   # cat ~/.ssh/airmon_ec2.pub
+my_ip          = "203.0.113.10"                            # curl -s ifconfig.me  (sin /32)
+
+# Opcionales (tienen default):
+# region            = "us-east-1"
+# instance_type     = "t3.small"
+# db_instance_class = "db.t3.micro"
+# code_bundle_key   = "app/airmon-app-bundle.tar.gz"
+# public_host       = ""    # vacío = usa la IP elástica de la EC2

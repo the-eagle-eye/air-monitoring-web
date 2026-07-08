@@ -98,20 +98,22 @@ Objetivo: que el ml-service tenga sus `.pkl` en la EC2 (no están en git).
 
 ---
 
-## Fase 4 — Desplegar la aplicación en la EC2
+## Fase 4 — Desplegar la aplicación en la EC2 (AUTOMÁTICO)
 
-Objetivo: levantar los contenedores contra RDS.
+Objetivo: levantar los contenedores contra RDS. **Ya no es manual**: el `user_data`
+de la EC2 (`infra/terraform/user_data.sh.tftpl`) hace todo el deploy al arrancar.
 
-| # | Tarea |
-|---|---|
-| 4.1 | SSH a la EC2; clonar el repo (o `scp` del código + `docker-compose.prod.yml`) |
-| 4.2 | Exportar env vars leyendo SSM: `DATABASE_URL` (con endpoint RDS + password), `SECRET_KEY`, `SMTP_*` |
-| 4.3 | Rebuild del frontend con `NEXT_PUBLIC_API_GATEWAY_URL` = `http://<IP-o-dominio>/api` (o `:8000`) |
-| 4.4 | Correr migraciones: contenedor `migrate` (Fase 1.3) o dejar que cada servicio migre al arrancar |
-| 4.5 | `docker compose -f docker-compose.prod.yml up -d --build` |
-| 4.6 | (Opcional) Caddy toma `:80/:443` y proxya al frontend + `/api` → gateway |
+| # | Tarea | Cómo |
+|---|---|---|
+| 4.1 | Subir el bundle de código + artefactos a S3 (repo privado) | `git archive` → S3, `aws s3 sync` ensemble → S3 (guía §5) |
+| 4.2 | `terraform apply` crea la EC2 y el user_data se ejecuta solo | baja bundle+artefactos de S3, lee secretos de SSM, arma `.env.prod` |
+| 4.3 | Migraciones alembic | corren solas al arrancar cada servicio contra RDS |
+| 4.4 | `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build` | lo lanza el user_data |
+| 4.5 | Frontend en modo prod | `frontend/Dockerfile.prod` (`next build`), `NEXT_PUBLIC_*` = gateway público (build args) |
+| 4.6 | (Opcional) Caddy `:80/:443` → frontend + `/api` → gateway | HTTPS con dominio |
 
-**Entregable:** stack corriendo; `docker compose ps` muestra los 6 contenedores healthy.
+**Entregable:** stack corriendo; seguir `sudo tail -f /var/log/airmon-deploy.log` en la
+EC2, luego `docker compose -f docker-compose.prod.yml ps` muestra 5 contenedores Up.
 
 ---
 

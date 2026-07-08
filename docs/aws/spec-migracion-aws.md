@@ -184,7 +184,11 @@ ops-service, y (opcional) Caddy como reverse-proxy HTTPS.
 
 ## 6. Frontend en AWS
 
-- Hoy el contenedor corre `next dev` con `NEXT_PUBLIC_*` apuntando a `localhost` (válido
+> ✅ **Resuelto (2026-07):** ya existe `frontend/Dockerfile.prod` (`next build && next
+> start`) con las `NEXT_PUBLIC_*` como build args, y `docker-compose.prod.yml` las
+> apunta al gateway público. Esta sección explica el porqué del diseño.
+
+- Hoy el contenedor de dev corre `next dev` con `NEXT_PUBLIC_*` apuntando a `localhost` (válido
   solo si el navegador está en la misma máquina que los contenedores). En AWS el
   navegador del evaluador está en otro lugar → deben apuntar al **hostname/IP pública**
   de la EC2 (o al dominio, si se usa Caddy).

@@ -36,7 +36,8 @@ Termina automáticamente a las 08:00 (hora Perú, UTC-5) del día siguiente, o a
 si se interrumpe con Ctrl-C / SIGTERM.
 
 Uso:
-    python scripts/nightly_fleet_job.py
+    python scripts/nightly_fleet_job.py                       # corre hasta 08:00 mañana
+    python scripts/nightly_fleet_job.py --duration 10         # corre 10 min y para
     python scripts/nightly_fleet_job.py --interval 300 --event-prob 0.15
     python scripts/nightly_fleet_job.py --stop "2026-07-05 08:00" --url http://localhost:8000
 
@@ -151,8 +152,10 @@ def get_state(client, base, token, device) -> str | None:
     return None
 
 
-def parse_stop(value: str | None) -> datetime:
-    """Hora de parada en UTC. Default: 08:00 Perú del día siguiente."""
+def parse_stop(value: str | None, duration_min: float | None) -> datetime:
+    """Hora de parada en UTC. Prioridad: --duration > --stop > default 08:00 mañana."""
+    if duration_min is not None:
+        return datetime.now(timezone.utc) + timedelta(minutes=duration_min)
     if value:
         naive = datetime.strptime(value, "%Y-%m-%d %H:%M")
         return naive.replace(tzinfo=PERU_TZ).astimezone(timezone.utc)
@@ -170,11 +173,13 @@ def main():
                     help="probabilidad por ciclo de inyectar un evento en un equipo (def 0.15)")
     ap.add_argument("--stop", default=None,
                     help="hora de parada 'YYYY-MM-DD HH:MM' (Perú). Def: 08:00 mañana")
+    ap.add_argument("--duration", type=float, default=None,
+                    help="minutos a correr desde ahora (tiene prioridad sobre --stop)")
     ap.add_argument("--seed", type=int, default=None)
     args = ap.parse_args()
 
     rng = random.Random(args.seed)
-    stop_utc = parse_stop(args.stop)
+    stop_utc = parse_stop(args.stop, args.duration)
     signal.signal(signal.SIGINT, _handle_signal)
     signal.signal(signal.SIGTERM, _handle_signal)
 

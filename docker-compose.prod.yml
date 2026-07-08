@@ -1,0 +1,104 @@
+# docker-compose de PRODUCCIÓN (EC2 única + RDS). Ver docs/aws/.
+#
+# Diferencias vs docker-compose.yml (dev):
+#   - SIN servicio `db`: la BD es RDS (DATABASE_URL viene del entorno).
+#   - SIN `ml-service-isolation`: gitignored/no deployable; ML_BACKEND=legacy no lo usa.
+#   - SIN bind-mounts de código: el código va horneado en la imagen.
+#   - SIN `--reload`: se sobreescribe el CMD con workers de producción.
+#   - `restart: unless-stopped` en todos.
+#   - Secretos por ${VAR} desde .env.prod (nunca hardcodeados).
+#   - Solo gateway (8000) y frontend (3000) exponen puertos; iot/ml/ops son internos
+#     (el gateway los proxya). El frontend llama SIEMPRE al gateway.
+#
+# Uso en la EC2 (lo hace el user_data):
+#   docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build
+
+services:
+  api-gateway:
+    build:
+      context: .
+      dockerfile: services/api-gateway/Dockerfile
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - IOT_SERVICE_URL=http://iot-service:8001
+      - ML_SERVICE_URL=http://ml-service:8002
+      - OPS_SERVICE_URL=http://ops-service:8003
+      - ML_BACKEND=legacy
+      - SECRET_KEY=${SECRET_KEY}
+    depends_on:
+      - iot-service
+      - ml-service
+      - ops-service
+    restart: unless-stopped
+
+  iot-service:
+    build:
+      context: .
+      dockerfile: services/iot-service/Dockerfile
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2"
+    expose:
+      - "8001"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - IOT_SERVICE_URL=http://iot-service:8001
+      - ML_SERVICE_URL=http://ml-service:8002
+      - OPS_SERVICE_URL=http://ops-service:8003
+    restart: unless-stopped
+
+  ml-service:
+    build:
+      context: .
+      dockerfile: services/ml-service/Dockerfile
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8002 --workers 1"
+    expose:
+      - "8002"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - IOT_SERVICE_URL=http://iot-service:8001
+      - ML_SERVICE_URL=http://ml-service:8002
+      - OPS_SERVICE_URL=http://ops-service:8003
+      - ENSEMBLE_ARTIFACTS_PATH=/app/ml_artifacts_ensemble_v1
+    volumes:
+      # artefactos del ensemble (.pkl gitignored): bajados de S3 por el user_data
+      - ./services/ml-service/ml_artifacts_ensemble_v1:/app/ml_artifacts_ensemble_v1:ro
+    restart: unless-stopped
+
+  ops-service:
+    build:
+      context: .
+      dockerfile: services/ops-service/Dockerfile
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8003 --workers 2"
+    expose:
+      - "8003"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - IOT_SERVICE_URL=http://iot-service:8001
+      - ML_SERVICE_URL=http://ml-service:8002
+      - OPS_SERVICE_URL=http://ops-service:8003
+      - SMTP_HOST=sandbox.smtp.mailtrap.io
+      - SMTP_PORT=2525
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=noreply@airmonitoring.oefa.gob.pe
+      - FRONTEND_URL=${FRONTEND_URL}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.prod
+      args:
+        # El navegador llama SIEMPRE al gateway público; el gateway proxya
+        # /api/v1/iot/* a iot-service. Por eso las 4 URLs apuntan al gateway.
+        - NEXT_PUBLIC_API_GATEWAY_URL=${PUBLIC_API_URL}
+        - NEXT_PUBLIC_IOT_SERVICE_URL=${PUBLIC_API_URL}
+        - NEXT_PUBLIC_ML_SERVICE_URL=${PUBLIC_API_URL}
+        - NEXT_PUBLIC_OPS_SERVICE_URL=${PUBLIC_API_URL}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped

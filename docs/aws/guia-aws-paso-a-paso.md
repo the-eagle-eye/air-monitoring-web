@@ -104,372 +104,137 @@ vía Terraform (§4).
 
 ## 3. Preparar el repo para producción
 
-El stack de dev usa bind-mounts y `--reload` (recarga en caliente). En un servidor
-necesitas el código *dentro* de la imagen y sin reload. Crea `docker-compose.prod.yml`
-en la raíz del repo:
+El stack de dev usa bind-mounts y `--reload` (recarga en caliente). Producción usa
+artefactos separados **que ya están versionados en el repo** — no hay que crearlos a mano:
 
-```yaml
-# docker-compose.prod.yml — para la EC2 (usa RDS, sin bind-mounts, sin --reload)
-services:
-  api-gateway:
-    build: { context: ., dockerfile: services/api-gateway/Dockerfile }
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
-    ports: ["8000:8000"]
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - IOT_SERVICE_URL=http://iot-service:8001
-      - ML_SERVICE_URL=http://ml-service:8002
-      - OPS_SERVICE_URL=http://ops-service:8003
-      - ML_BACKEND=legacy
-      - SECRET_KEY=${SECRET_KEY}
-    restart: unless-stopped
+| Archivo | Qué es |
+|---|---|
+| `docker-compose.prod.yml` (raíz) | Compose de producción: sin `db` (usa RDS), sin `ml-service-isolation`, sin bind-mounts de código, `--workers` en vez de `--reload`, `restart: unless-stopped`, secretos por `${VAR}`. Solo el gateway (8000) y el frontend (3000) exponen puertos; iot/ml/ops son internos (el gateway los proxya). |
+| `frontend/Dockerfile.prod` | Frontend en modo producción (`next build && next start`); las `NEXT_PUBLIC_*` se hornean en build-time como build args (apuntan al gateway público). |
 
-  iot-service:
-    build: { context: ., dockerfile: services/iot-service/Dockerfile }
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - IOT_SERVICE_URL=http://iot-service:8001
-      - ML_SERVICE_URL=http://ml-service:8002
-      - OPS_SERVICE_URL=http://ops-service:8003
-    restart: unless-stopped
+> **Notas de diseño:**
+> - **RDS, no contenedor `db`:** `DATABASE_URL` llega desde el entorno (`.env.prod`).
+> - **`ml-service-isolation` excluido:** está gitignored y no forma parte del deploy;
+>   `ML_BACKEND=legacy` (el default) no lo usa.
+> - **Frontend → gateway:** las 4 `NEXT_PUBLIC_*` apuntan al gateway público; el gateway
+>   proxya `/api/v1/iot/*` a iot-service, así el navegador solo necesita el puerto 8000.
+> - **Secretos por `${VAR}`:** el `docker-compose.prod.yml` no contiene valores; se
+>   inyectan vía `.env.prod`, que genera el `user_data` de la EC2 leyendo SSM (§6).
 
-  ml-service:
-    build: { context: ., dockerfile: services/ml-service/Dockerfile }
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8002 --workers 2"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - IOT_SERVICE_URL=http://iot-service:8001
-      - ML_SERVICE_URL=http://ml-service:8002
-      - OPS_SERVICE_URL=http://ops-service:8003
-      - ENSEMBLE_ARTIFACTS_PATH=/app/ml_artifacts_ensemble_v1
-    volumes:
-      - ./services/ml-service/ml_artifacts_ensemble_v1:/app/ml_artifacts_ensemble_v1
-    restart: unless-stopped
-
-  ops-service:
-    build: { context: ., dockerfile: services/ops-service/Dockerfile }
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8003 --workers 2"
-    environment:
-      - DATABASE_URL=${DATABASE_URL}
-      - IOT_SERVICE_URL=http://iot-service:8001
-      - ML_SERVICE_URL=http://ml-service:8002
-      - OPS_SERVICE_URL=http://ops-service:8003
-      - SMTP_HOST=sandbox.smtp.mailtrap.io
-      - SMTP_PORT=2525
-      - SMTP_USER=${SMTP_USER}
-      - SMTP_PASSWORD=${SMTP_PASSWORD}
-      - SMTP_FROM=noreply@airmonitoring.oefa.gob.pe
-      - FRONTEND_URL=${FRONTEND_URL}
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile
-      args:
-        - NEXT_PUBLIC_API_GATEWAY_URL=${PUBLIC_API_URL}
-    ports: ["3000:3000"]
-    restart: unless-stopped
+No necesitas escribir estos archivos: revísalos y valida el compose:
+```bash
+docker compose -f docker-compose.prod.yml config >/dev/null && echo "compose OK"
 ```
 
-> **Notas:**
-> - No hay servicio `db` — usamos RDS (el `DATABASE_URL` apunta al endpoint de RDS).
-> - No hay `ml-service-isolation` (no está en git; `ML_BACKEND=legacy` no lo usa).
-> - Los secretos vienen de `${VAR}` — se exportan en la EC2 antes de `up`, nunca se
->   escriben en el archivo.
-> - Para el frontend en producción, ajusta su `Dockerfile` a `next build && next start`
->   y acepta `NEXT_PUBLIC_API_GATEWAY_URL` como build arg (hoy usa `next dev`).
-
-Añade a `.gitignore`: `docker-compose.prod.yml` puede ir versionado (usa `${VAR}`), pero
-`secrets.local.txt`, `terraform.tfvars` y `*.tfstate` **nunca**.
-
-> **Aprendes:** la diferencia entre una imagen de desarrollo y una de producción.
+> **Aprendes:** la diferencia entre una imagen de desarrollo (bind-mounts + reload) y
+> una de producción (código horneado, sin reload, secretos externos).
 
 ---
 
 ## 4. Terraform: crear la infraestructura
 
-Crea la carpeta `infra/terraform/` y estos archivos. Es la parte que más "cloud" te
-enseña: describes lo que quieres y Terraform lo crea.
+Toda la infra está definida y **validada** en `infra/terraform/` (HCL real, no
+copy-paste). Archivos: `main.tf`, `variables.tf`, `network.tf`, `security.tf`,
+`rds.tf`, `s3.tf`, `ssm.tf`, `ec2.tf` (+ `user_data.sh.tftpl`), `outputs.tf`.
 
-### 4.1 `variables.tf`
-```hcl
-variable "region"        { default = "us-east-1" }
-variable "instance_type" { default = "t3.small" }   # t3.micro si insistes en free-tier
-variable "db_password"   { type = string, sensitive = true }
-variable "secret_key"    { type = string, sensitive = true }
-variable "smtp_user"     { type = string, sensitive = true }
-variable "smtp_password" { type = string, sensitive = true }
-variable "ssh_public_key"{ type = string }   # contenido de ~/.ssh/airmon_ec2.pub
-variable "my_ip"         { type = string }   # tu IP pública /32 para SSH
-```
-
-### 4.2 `main.tf`
-```hcl
-terraform {
-  required_providers { aws = { source = "hashicorp/aws", version = "~> 5.0" } }
-}
-provider "aws" { region = var.region }
-
-data "aws_availability_zones" "available" { state = "available" }
-```
-
-### 4.3 `network.tf`
-```hcl
-resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  tags = { Name = "airmon-vpc" }
-}
-resource "aws_internet_gateway" "igw" { vpc_id = aws_vpc.main.id }
-
-resource "aws_subnet" "public" {
-  vpc_id = aws_vpc.main.id
-  cidr_block = "10.0.1.0/24"
-  availability_zone = data.aws_availability_zones.available.names[0]
-  map_public_ip_on_launch = true
-  tags = { Name = "airmon-public" }
-}
-# RDS exige subnets en >= 2 AZ, aunque no sean públicas
-resource "aws_subnet" "private_a" {
-  vpc_id = aws_vpc.main.id
-  cidr_block = "10.0.2.0/24"
-  availability_zone = data.aws_availability_zones.available.names[0]
-}
-resource "aws_subnet" "private_b" {
-  vpc_id = aws_vpc.main.id
-  cidr_block = "10.0.3.0/24"
-  availability_zone = data.aws_availability_zones.available.names[1]
-}
-resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
-  route { cidr_block = "0.0.0.0/0", gateway_id = aws_internet_gateway.igw.id }
-}
-resource "aws_route_table_association" "public" {
-  subnet_id = aws_subnet.public.id
-  route_table_id = aws_route_table.public.id
-}
-```
-
-### 4.4 `security.tf`
-```hcl
-resource "aws_security_group" "ec2" {
-  name = "airmon-ec2-sg", vpc_id = aws_vpc.main.id
-  ingress { from_port=22  to_port=22  protocol="tcp" cidr_blocks=["${var.my_ip}/32"] }
-  ingress { from_port=80  to_port=80  protocol="tcp" cidr_blocks=["0.0.0.0/0"] }
-  ingress { from_port=443 to_port=443 protocol="tcp" cidr_blocks=["0.0.0.0/0"] }
-  ingress { from_port=3000 to_port=3000 protocol="tcp" cidr_blocks=["0.0.0.0/0"] } # frontend (demo)
-  ingress { from_port=8000 to_port=8000 protocol="tcp" cidr_blocks=["0.0.0.0/0"] } # gateway (demo)
-  egress  { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
-}
-resource "aws_security_group" "rds" {
-  name = "airmon-rds-sg", vpc_id = aws_vpc.main.id
-  ingress { from_port=5432 to_port=5432 protocol="tcp" security_groups=[aws_security_group.ec2.id] }
-  egress  { from_port=0 to_port=0 protocol="-1" cidr_blocks=["0.0.0.0/0"] }
-}
-```
-
-### 4.5 `rds.tf`
-```hcl
-resource "aws_db_subnet_group" "main" {
-  name = "airmon-db-subnet"
-  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
-}
-resource "aws_db_instance" "main" {
-  identifier = "airmon-db"
-  engine = "postgres"
-  engine_version = "15"
-  instance_class = "db.t3.micro"
-  allocated_storage = 20
-  storage_type = "gp3"
-  db_name = "airmonitoring"
-  username = "airmon"
-  password = var.db_password
-  db_subnet_group_name = aws_db_subnet_group.main.name
-  vpc_security_group_ids = [aws_security_group.rds.id]
-  publicly_accessible = false
-  skip_final_snapshot = true
-  backup_retention_period = 7
-}
-```
-
-### 4.6 `s3.tf`
-```hcl
-resource "aws_s3_bucket" "artifacts" {
-  bucket = "airmon-artifacts-${data.aws_caller_identity.current.account_id}"
-}
-data "aws_caller_identity" "current" {}
-resource "aws_s3_bucket_versioning" "artifacts" {
-  bucket = aws_s3_bucket.artifacts.id
-  versioning_configuration { status = "Enabled" }
-}
-```
-
-### 4.7 `ssm.tf` (secretos cifrados)
-```hcl
-resource "aws_ssm_parameter" "db_password"   { name="/airmon/db_password"   type="SecureString" value=var.db_password }
-resource "aws_ssm_parameter" "secret_key"    { name="/airmon/secret_key"    type="SecureString" value=var.secret_key }
-resource "aws_ssm_parameter" "smtp_user"     { name="/airmon/smtp_user"     type="SecureString" value=var.smtp_user }
-resource "aws_ssm_parameter" "smtp_password" { name="/airmon/smtp_password" type="SecureString" value=var.smtp_password }
-```
-
-### 4.8 `ec2.tf` (rol IAM + instancia + user_data que instala Docker)
-```hcl
-# Rol para que la EC2 lea S3 y SSM sin claves hardcodeadas
-resource "aws_iam_role" "ec2" {
-  name = "airmon-ec2-role"
-  assume_role_policy = jsonencode({
-    Version="2012-10-17",
-    Statement=[{Effect="Allow", Principal={Service="ec2.amazonaws.com"}, Action="sts:AssumeRole"}]
-  })
-}
-resource "aws_iam_role_policy" "ec2" {
-  role = aws_iam_role.ec2.id
-  policy = jsonencode({
-    Version="2012-10-17",
-    Statement=[
-      {Effect="Allow", Action=["s3:GetObject","s3:ListBucket"],
-       Resource=[aws_s3_bucket.artifacts.arn, "${aws_s3_bucket.artifacts.arn}/*"]},
-      {Effect="Allow", Action=["ssm:GetParameter","ssm:GetParameters","ssm:GetParametersByPath"],
-       Resource="arn:aws:ssm:${var.region}:*:parameter/airmon/*"}
-    ]
-  })
-}
-resource "aws_iam_instance_profile" "ec2" { name="airmon-ec2-profile" role=aws_iam_role.ec2.name }
-
-resource "aws_key_pair" "main" { key_name="airmon-key" public_key=var.ssh_public_key }
-
-data "aws_ami" "al2023" {
-  most_recent = true
-  owners = ["amazon"]
-  filter { name="name" values=["al2023-ami-*-x86_64"] }
-}
-
-resource "aws_instance" "app" {
-  ami = data.aws_ami.al2023.id
-  instance_type = var.instance_type
-  subnet_id = aws_subnet.public.id
-  vpc_security_group_ids = [aws_security_group.ec2.id]
-  iam_instance_profile = aws_iam_instance_profile.ec2.name
-  key_name = aws_key_pair.main.key_name
-  user_data = <<-EOF
-    #!/bin/bash
-    dnf update -y
-    dnf install -y docker git
-    systemctl enable --now docker
-    usermod -aG docker ec2-user
-    # docker compose v2 plugin
-    mkdir -p /usr/local/lib/docker/cli-plugins
-    curl -sL https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64 \
-      -o /usr/local/lib/docker/cli-plugins/docker-compose
-    chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-  EOF
-  tags = { Name = "airmon-app" }
-}
-resource "aws_eip" "app" { instance = aws_instance.app.id }
-```
-
-### 4.9 `outputs.tf`
-```hcl
-output "ec2_public_ip" { value = aws_eip.app.public_ip }
-output "rds_endpoint"  { value = aws_db_instance.main.address }
-output "s3_bucket"     { value = aws_s3_bucket.artifacts.bucket }
-```
-
-### 4.10 Aplicar
+### 4.1 Configura tus variables (secretos → NO se commitean)
 ```bash
 cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+# edita terraform.tfvars:
+#   db_password / secret_key  -> genera nuevos (openssl rand)
+#   smtp_user / smtp_password -> credenciales Mailtrap
+#   ssh_public_key            -> cat ~/.ssh/airmon_ec2.pub
+#   my_ip                     -> curl -s ifconfig.me
+```
+`terraform.tfvars` y `*.tfstate` están en `.gitignore` — nunca salen del repo local.
 
-# terraform.tfvars (NO commitear — contiene secretos)
-cat > terraform.tfvars <<EOF
-db_password    = "<tu-db-password>"
-secret_key     = "<tu-secret-key>"
-smtp_user      = "<mailtrap-user>"
-smtp_password  = "<mailtrap-password>"
-ssh_public_key = "$(cat ~/.ssh/airmon_ec2.pub)"
-my_ip          = "$(curl -s ifconfig.me)"
-EOF
+### 4.2 Aplica con tu perfil AWS
+```bash
+export AWS_PROFILE=airmon_v2      # el perfil ya configurado
 
-terraform init      # descarga el provider aws
-terraform plan      # muestra QUÉ va a crear (revísalo)
-terraform apply     # escribe 'yes' — tarda ~5-10 min (RDS es lo lento)
+terraform init      # (o: tofu init) descarga el provider aws
+terraform validate  # debe decir "Success! The configuration is valid."
+terraform plan      # revisa QUÉ va a crear
+terraform apply     # 'yes' — tarda ~5-10 min (RDS es lo lento)
 
-terraform output    # anota ec2_public_ip, rds_endpoint, s3_bucket
+terraform output    # ec2_public_ip, rds_endpoint, s3_bucket, app_url, api_url, ssh
 ```
 
-> **Aprendes:** el ciclo `init → plan → apply` de Terraform, y cómo un rol IAM permite
-> que la EC2 lea S3/SSM sin claves. Guarda los outputs:
+> **Qué crea:** VPC + subred pública + 2 privadas, security groups (RDS solo desde la
+> EC2), RDS PostgreSQL 15, bucket S3, 4 parámetros SSM (secretos cifrados), rol IAM
+> (EC2 lee S3+SSM sin claves), EC2 `t3.small` con Elastic IP y **deploy automático**
+> (ver §6). Guarda los outputs:
 > ```bash
-> export EC2_IP=$(terraform output -raw ec2_public_ip)
-> export RDS_HOST=$(terraform output -raw rds_endpoint)
 > export S3_BUCKET=$(terraform output -raw s3_bucket)
+> export EC2_IP=$(terraform output -raw ec2_public_ip)
 > ```
 
+> **Aprendes:** el ciclo `init → validate → plan → apply` y cómo un rol IAM permite que
+> la EC2 lea S3/SSM sin claves hardcodeadas.
+
 ---
 
-## 5. Subir los artefactos ML a S3
+## 5. Subir código y artefactos a S3 (repo privado)
 
-Los 15 `.pkl` del ensemble **no están en git** (gitignored). Súbelos a S3:
+El repo es **privado**, así que la EC2 no hace `git clone`. En su lugar se sube un
+**bundle del código** a S3; la EC2 lo baja con su rol IAM (sin credenciales git). Los
+15 `.pkl` del ensemble tampoco están en git → también van por S3.
 
 ```bash
-# desde la raíz del repo, en tu máquina local
-aws s3 sync services/ml-service/ml_artifacts_ensemble_v1/ s3://$S3_BUCKET/ensemble/
-aws s3 ls s3://$S3_BUCKET/ensemble/    # debes ver 15 .pkl + 6 .json
+# desde la raíz del repo, en tu máquina local (con AWS_PROFILE=airmon_v2)
+
+# (a) bundle del código (respeta .gitignore; solo lo versionado)
+git archive --format=tar.gz -o airmon-app-bundle.tar.gz HEAD
+aws s3 cp airmon-app-bundle.tar.gz "s3://$S3_BUCKET/app/airmon-app-bundle.tar.gz"
+
+# (b) artefactos del ensemble (.pkl + .json gitignored)
+aws s3 sync services/ml-service/ml_artifacts_ensemble_v1/ "s3://$S3_BUCKET/ensemble/"
+
+# verifica
+aws s3 ls "s3://$S3_BUCKET/app/"        # el bundle
+aws s3 ls "s3://$S3_BUCKET/ensemble/"   # 15 .pkl + 6 .json
 ```
 
-> **Aprendes:** por qué hay archivos que el repo no versiona (binarios pesados) y cómo
-> S3 resuelve ese "hueco" en el despliegue.
+> **Importante:** el bundle sale de `git archive HEAD`, así que sube lo COMMITEADO.
+> Commitea tus cambios antes. Cada re-deploy = re-subir el bundle + recrear la EC2
+> (`terraform apply`, que detecta el cambio de `user_data`).
+
+> **Aprendes:** cómo desplegar un repo privado sin poner credenciales de git en el
+> servidor — el código y los binarios viajan por S3 con permisos IAM.
 
 ---
 
-## 6. Desplegar la app en la EC2
+## 6. Deploy automático (lo hace la EC2 sola)
 
-### 6.1 Entrar por SSH
+No hay pasos manuales de deploy: el `user_data` de la EC2 (en `ec2.tf` /
+`user_data.sh.tftpl`) se ejecuta al arrancar y hace TODO:
+
+1. Instala Docker + docker-compose.
+2. Resuelve su IP pública (para las URLs del frontend).
+3. Baja el **bundle de código** desde S3 y lo extrae.
+4. Baja los **artefactos del ensemble** desde S3.
+5. Lee los **secretos de SSM** (db_password, secret_key, smtp_*) y arma `.env.prod`.
+6. `docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --build`.
+
+Las migraciones alembic corren solas al arrancar cada servicio contra RDS.
+
+### 6.1 Seguir el progreso del arranque
 ```bash
+# SSH a la EC2 (el comando exacto lo da: terraform output -raw ssh)
 ssh -i ~/.ssh/airmon_ec2 ec2-user@$EC2_IP
+
+# [EN LA EC2] ver el log del deploy automático
+sudo tail -f /var/log/airmon-deploy.log
+# cuando termine:
+docker compose -f air-monitoring-web/docker-compose.prod.yml ps   # 5 servicios Up
 ```
 
-### 6.2 [EN LA EC2] Clonar el repo y bajar los artefactos
-```bash
-# [EN LA EC2]
-git clone https://github.com/the-eagle-eye/air-monitoring-web.git
-cd air-monitoring-web
+> El primer arranque tarda varios minutos (instala Docker + `npm ci` + `next build` +
+> build de las 2 imágenes ML). Es normal.
 
-# descargar los .pkl desde S3 (el rol IAM ya da permiso, sin claves)
-aws s3 sync s3://<TU_BUCKET>/ensemble/ services/ml-service/ml_artifacts_ensemble_v1/
-ls services/ml-service/ml_artifacts_ensemble_v1/   # 21 archivos
-```
-
-### 6.3 [EN LA EC2] Cargar secretos desde SSM como variables de entorno
-```bash
-# [EN LA EC2]
-export DB_PASSWORD=$(aws ssm get-parameter --name /airmon/db_password --with-decryption --query Parameter.Value --output text)
-export SECRET_KEY=$(aws ssm get-parameter --name /airmon/secret_key --with-decryption --query Parameter.Value --output text)
-export SMTP_USER=$(aws ssm get-parameter --name /airmon/smtp_user --with-decryption --query Parameter.Value --output text)
-export SMTP_PASSWORD=$(aws ssm get-parameter --name /airmon/smtp_password --with-decryption --query Parameter.Value --output text)
-
-# construir DATABASE_URL apuntando a RDS
-export RDS_HOST="<rds_endpoint de terraform output>"
-export DATABASE_URL="postgresql://airmon:${DB_PASSWORD}@${RDS_HOST}:5432/airmonitoring"
-export FRONTEND_URL="http://${EC2_IP}:3000"      # o tu dominio
-export PUBLIC_API_URL="http://${EC2_IP}:8000"    # el frontend llamará aquí
-```
-
-### 6.4 [EN LA EC2] Levantar el stack
-```bash
-# [EN LA EC2]
-docker compose -f docker-compose.prod.yml up -d --build
-docker compose -f docker-compose.prod.yml ps    # los 5 servicios 'Up'
-docker compose -f docker-compose.prod.yml logs -f ml-service   # ver que carga los .pkl
-```
-
-Las migraciones alembic corren solas al arrancar cada servicio (crean tablas + seed).
-
-> **Aprendes:** que tu `docker-compose` corre igual en la nube que en tu laptop; lo único
-> distinto es de dónde vienen la BD (RDS) y los secretos (SSM).
-
----
+> **Aprendes:** IaC de verdad — `terraform apply` deja el sistema corriendo sin tocar
+> el servidor a mano; el user_data es el "deploy script" reproducible.
 
 ## 7. Verificar la demo
 
