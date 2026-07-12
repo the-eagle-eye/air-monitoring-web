@@ -38,7 +38,11 @@ export default function LecturasTable({ lecturas }: LecturasTableProps) {
       key: 'timestamp_lectura',
       header: 'Timestamp',
       render: (item: LecturaIoT) =>
-        new Date(item.timestamp_lectura.endsWith('Z') ? item.timestamp_lectura : item.timestamp_lectura + 'Z').toLocaleString(),
+        new Date(
+          item.timestamp_lectura.endsWith('Z')
+            ? item.timestamp_lectura
+            : item.timestamp_lectura + 'Z',
+        ).toLocaleString(),
     },
     ...SENSOR_COLUMNS.map((col) => ({
       ...col,

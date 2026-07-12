@@ -9,7 +9,9 @@ interface ProximasCalibracionesProps {
   calibraciones: CalibracionOps[];
 }
 
-export default function ProximasCalibraciones({ calibraciones }: ProximasCalibracionesProps) {
+export default function ProximasCalibraciones({
+  calibraciones,
+}: ProximasCalibracionesProps) {
   const recent = calibraciones.slice(0, 8);
 
   return (

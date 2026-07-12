@@ -2,7 +2,6 @@
 docs/plan-c1-c6-c4-c5.md fase C4.
 """
 import json
-import os
 from datetime import datetime, timedelta, timezone
 
 import pytest

@@ -139,7 +139,9 @@ def start_scheduler() -> BackgroundScheduler | None:
             id="retrain_degradation_check", replace_existing=True,
             max_instances=1, coalesce=True,
         )
-        logger.info("Chequeo de degradación/reentrenamiento programado diario (04:00 UTC)")
+        logger.info(
+            "Chequeo de degradación/reentrenamiento programado diario (04:00 UTC)"
+        )
 
     if AUTOCLOSE_ENABLED:
         _scheduler.add_job(

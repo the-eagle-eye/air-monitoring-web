@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LecturaIoTCreate(BaseModel):
-    """Flexible IoT payload — accepts any sensor keys beyond `equipo` and `timestamp`."""
+    """Flexible IoT payload — accepts sensor keys beyond `equipo`/`timestamp`."""
 
     model_config = ConfigDict(extra="allow")
 

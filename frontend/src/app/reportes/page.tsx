@@ -80,7 +80,7 @@ export default function ReportesPage() {
       key: 'tipo',
       header: 'Tipo',
       render: (item: ReporteRow) => (
-        <span className="inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+        <span className="inline-block rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 capitalize dark:bg-blue-900/30 dark:text-blue-400">
           {item.tipo}
         </span>
       ),
@@ -204,20 +204,21 @@ export default function ReportesPage() {
       {searched && (
         <div className="mb-4 flex items-center gap-3">
           <span className="text-sm text-zinc-500 dark:text-zinc-400">
-            {total} registro{total !== 1 ? 's' : ''} encontrado{total !== 1 ? 's' : ''}
+            {total} registro{total !== 1 ? 's' : ''} encontrado
+            {total !== 1 ? 's' : ''}
           </span>
           <div className="ml-auto flex gap-2">
             <button
               onClick={() => handleExport('csv')}
               disabled={exporting !== null}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-50"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               {exporting === 'csv' ? 'Exportando...' : 'Exportar CSV'}
             </button>
             <button
               onClick={() => handleExport('pdf')}
               disabled={exporting !== null}
-              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800 disabled:opacity-50"
+              className="rounded-md border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:text-zinc-300 dark:hover:bg-zinc-800"
             >
               {exporting === 'pdf' ? 'Exportando...' : 'Exportar PDF'}
             </button>

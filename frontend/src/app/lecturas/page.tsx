@@ -71,10 +71,7 @@ export default function LecturasPage() {
               </option>
             ))}
           </select>
-          <Badge
-            label={`${total} lecturas`}
-            variant="info"
-          />
+          <Badge label={`${total} lecturas`} variant="info" />
         </div>
       </div>
 

@@ -16,9 +16,7 @@ export default defineConfig({
     storageState: { cookies: [], origins: [] },
   },
 
-  projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-  ],
+  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 
   // Auto-start dev server when running tests locally
   webServer: process.env.CI

@@ -37,7 +37,18 @@ const Chart = dynamic(
         );
       }
 
-      function CustomTooltip({ active, payload }: { active?: boolean; payload?: Array<{ name: string; value: number; payload: { color: string; value: number }; [k: string]: unknown }> }) {
+      function CustomTooltip({
+        active,
+        payload,
+      }: {
+        active?: boolean;
+        payload?: Array<{
+          name: string;
+          value: number;
+          payload: { color: string; value: number };
+          [k: string]: unknown;
+        }>;
+      }) {
         if (!active || !payload || !payload.length) return null;
         const entry = payload[0];
         const total = payload.reduce((sum, p) => sum + p.value, 0) || 1;
@@ -53,7 +64,14 @@ const Chart = dynamic(
               fontSize: 13,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                marginBottom: 2,
+              }}
+            >
               <span
                 style={{
                   display: 'inline-block',
@@ -65,14 +83,15 @@ const Chart = dynamic(
               />
               <strong>{entry.name}</strong>
             </div>
-            <div>{entry.value} equipo{entry.value !== 1 ? 's' : ''} ({pct}%)</div>
+            <div>
+              {entry.value} equipo{entry.value !== 1 ? 's' : ''} ({pct}%)
+            </div>
           </div>
         );
       }
 
       function RiskPieChart({ data }: { data: RiskDistribution[] }) {
         const filtered = data.filter((d) => d.value > 0);
-        const total = filtered.reduce((sum, d) => sum + d.value, 0);
 
         return (
           <ResponsiveContainer width="100%" height={280}>

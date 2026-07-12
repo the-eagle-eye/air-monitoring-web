@@ -19,7 +19,10 @@ const PENALTY: Record<HealthState, number> = {
 function computeScore(evaluables: HealthState[]): number {
   if (evaluables.length === 0) return 100;
   const totalPenalty = evaluables.reduce((acc, s) => acc + PENALTY[s], 0);
-  return Math.max(0, Math.min(100, Math.round(100 - totalPenalty / evaluables.length)));
+  return Math.max(
+    0,
+    Math.min(100, Math.round(100 - totalPenalty / evaluables.length)),
+  );
 }
 
 function getConfig(score: number, countCritico: number) {
@@ -77,7 +80,10 @@ export default function SaludPredictivaSemaforo({
             }}
           >
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white dark:bg-zinc-900">
-              <span className="text-xl font-bold" style={{ color: config.color }}>
+              <span
+                className="text-xl font-bold"
+                style={{ color: config.color }}
+              >
                 {score}
               </span>
             </div>
@@ -95,23 +101,30 @@ export default function SaludPredictivaSemaforo({
             </h2>
           </div>
           <p className="mt-0.5 text-xs text-zinc-400 dark:text-zinc-500">
-            Detección de anomalías del sensor por IA (Autoencoder + Isolation Forest)
+            Detección de anomalías del sensor por IA (Autoencoder + Isolation
+            Forest)
           </p>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             {config.desc}
           </p>
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-zinc-500 dark:text-zinc-400">
-            {(['OBSERVADO', 'EN_RIESGO', 'CRITICO', 'SANO', 'SIN_DATOS'] as HealthState[]).map(
-              (st) => (
-                <span key={st}>
-                  <span
-                    className="mr-1 inline-block h-2 w-2 rounded-full"
-                    style={{ backgroundColor: HEALTH_STATE_CONFIG[st].color }}
-                  />
-                  {count(st)} {HEALTH_STATE_CONFIG[st].label.toLowerCase()}
-                </span>
-              ),
-            )}
+            {(
+              [
+                'OBSERVADO',
+                'EN_RIESGO',
+                'CRITICO',
+                'SANO',
+                'SIN_DATOS',
+              ] as HealthState[]
+            ).map((st) => (
+              <span key={st}>
+                <span
+                  className="mr-1 inline-block h-2 w-2 rounded-full"
+                  style={{ backgroundColor: HEALTH_STATE_CONFIG[st].color }}
+                />
+                {count(st)} {HEALTH_STATE_CONFIG[st].label.toLowerCase()}
+              </span>
+            ))}
           </div>
         </div>
       </div>

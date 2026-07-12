@@ -3,7 +3,11 @@ import { useEffect, useRef } from 'react';
 /**
  * Executes a callback at regular intervals. Pauses when the browser tab is hidden.
  */
-export function usePolling(callback: () => void, intervalMs: number, enabled = true) {
+export function usePolling(
+  callback: () => void,
+  intervalMs: number,
+  enabled = true,
+) {
   const savedCallback = useRef(callback);
 
   useEffect(() => {

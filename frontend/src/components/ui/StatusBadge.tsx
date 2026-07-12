@@ -1,6 +1,12 @@
 import Badge from './Badge';
 
-const STATUS_MAP: Record<string, { label: string; variant: 'success' | 'warning' | 'danger' | 'info' | 'default' }> = {
+const STATUS_MAP: Record<
+  string,
+  {
+    label: string;
+    variant: 'success' | 'warning' | 'danger' | 'info' | 'default';
+  }
+> = {
   activo: { label: 'Activo', variant: 'success' },
   inactivo: { label: 'Inactivo', variant: 'default' },
   en_revision: { label: 'En Revision', variant: 'warning' },
@@ -15,6 +21,9 @@ interface StatusBadgeProps {
 }
 
 export default function StatusBadge({ status }: StatusBadgeProps) {
-  const config = STATUS_MAP[status] ?? { label: status, variant: 'default' as const };
+  const config = STATUS_MAP[status] ?? {
+    label: status,
+    variant: 'default' as const,
+  };
   return <Badge label={config.label} variant={config.variant} />;
 }

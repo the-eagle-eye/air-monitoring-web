@@ -24,12 +24,58 @@ function SensorIcon({ className }: { className?: string }) {
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
     >
-      <rect x="8" y="6" width="32" height="36" rx="4" stroke="currentColor" strokeWidth="2" fill="none" />
-      <rect x="14" y="12" width="20" height="12" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" />
-      <line x1="18" y1="16" x2="18" y2="22" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="22" y1="14" x2="22" y2="22" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="26" y1="17" x2="26" y2="22" stroke="currentColor" strokeWidth="1.5" />
-      <line x1="30" y1="15" x2="30" y2="22" stroke="currentColor" strokeWidth="1.5" />
+      <rect
+        x="8"
+        y="6"
+        width="32"
+        height="36"
+        rx="4"
+        stroke="currentColor"
+        strokeWidth="2"
+        fill="none"
+      />
+      <rect
+        x="14"
+        y="12"
+        width="20"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        fill="none"
+      />
+      <line
+        x1="18"
+        y1="16"
+        x2="18"
+        y2="22"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <line
+        x1="22"
+        y1="14"
+        x2="22"
+        y2="22"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <line
+        x1="26"
+        y1="17"
+        x2="26"
+        y2="22"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
+      <line
+        x1="30"
+        y1="15"
+        x2="30"
+        y2="22"
+        stroke="currentColor"
+        strokeWidth="1.5"
+      />
       <circle cx="17" cy="32" r="2" fill="currentColor" />
       <circle cx="24" cy="32" r="2" fill="currentColor" />
       <circle cx="31" cy="32" r="2" fill="currentColor" />
@@ -64,14 +110,16 @@ export default function EquipoCard({
   const estadoInfo = ESTADO_CONFIG[equipo.estado] ?? ESTADO_CONFIG.activo;
   const state = health?.health_state ?? null;
   // Borde por severidad de salud del ensemble (gris si aún no hay estado).
-  const borderColor = state ? HEALTH_BORDER[state] : 'border-l-zinc-300 dark:border-l-zinc-700';
+  const borderColor = state
+    ? HEALTH_BORDER[state]
+    : 'border-l-zinc-300 dark:border-l-zinc-700';
 
   const hsp = health?.hours_since_prev;
 
   return (
     <Link
       href={`/equipos/${equipo.device_id}`}
-      className={`flex h-full flex-col rounded-lg border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 border-l-4 ${borderColor} p-4 transition-shadow hover:shadow-md`}
+      className={`flex h-full flex-col rounded-lg border border-l-4 border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 ${borderColor} p-4 transition-shadow hover:shadow-md`}
     >
       <div className="flex items-start gap-3">
         <div className="flex-shrink-0 text-zinc-400 dark:text-zinc-500">
@@ -103,7 +151,9 @@ export default function EquipoCard({
                 Operando sin corte
               </span>
               <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-                {hsp < 1 ? `${Math.round(hsp * 60)} min` : `${hsp.toFixed(1)} h`}
+                {hsp < 1
+                  ? `${Math.round(hsp * 60)} min`
+                  : `${hsp.toFixed(1)} h`}
               </span>
             </div>
           )}

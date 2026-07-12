@@ -30,7 +30,9 @@ export default function ProveedoresPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   function openCreate() {
     setEditingId(null);
@@ -110,7 +112,7 @@ export default function ProveedoresPage() {
           Proveedores
         </h1>
         <button
-          onClick={() => showForm ? setShowForm(false) : openCreate()}
+          onClick={() => (showForm ? setShowForm(false) : openCreate())}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {showForm ? 'Cancelar' : 'Nuevo Proveedor'}
@@ -122,7 +124,10 @@ export default function ProveedoresPage() {
           <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
             {editingId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
           </h2>
-          <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-wrap items-end gap-4"
+          >
             <div className="flex-1">
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Nombre
@@ -147,17 +152,25 @@ export default function ProveedoresPage() {
       )}
 
       <div className="mb-4">
-        <span className="text-sm text-zinc-500">{proveedores.length} proveedores activos</span>
+        <span className="text-sm text-zinc-500">
+          {proveedores.length} proveedores activos
+        </span>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <DataTable columns={columns} data={proveedores} keyExtractor={(p) => p.id} />
+        <DataTable
+          columns={columns}
+          data={proveedores}
+          keyExtractor={(p) => p.id}
+        />
       )}
     </div>
   );

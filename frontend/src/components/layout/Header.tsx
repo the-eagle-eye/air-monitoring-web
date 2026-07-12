@@ -1,9 +1,9 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useState, useRef, useEffect } from "react";
-import { useAuth } from "@/lib/auth";
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '@/lib/auth';
 
 interface NavItem {
   label: string;
@@ -24,8 +24,8 @@ function NavLink({
       href={href}
       className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
         isActive
-          ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-          : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+          ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+          : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50'
       }`}
     >
       {label}
@@ -46,8 +46,8 @@ function Dropdown({ label, items }: { label: string; items: NavItem[] }) {
         setOpen(false);
       }
     }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   return (
@@ -56,24 +56,28 @@ function Dropdown({ label, items }: { label: string; items: NavItem[] }) {
         onClick={() => setOpen((prev) => !prev)}
         className={`flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
           isActive
-            ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-            : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+            ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+            : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-50'
         }`}
       >
         {label}
         <svg
-          className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
           strokeWidth={2}
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="M19 9l-7 7-7-7"
+          />
         </svg>
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-44 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+        <div className="absolute top-full left-0 z-50 mt-1 w-44 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
           {items.map((item) => {
             const subActive = pathname.startsWith(item.href);
             return (
@@ -83,8 +87,8 @@ function Dropdown({ label, items }: { label: string; items: NavItem[] }) {
                 onClick={() => setOpen(false)}
                 className={`block px-4 py-2 text-sm transition-colors ${
                   subActive
-                    ? "bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50"
-                    : "text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                    ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-50'
+                    : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50'
                 }`}
               >
                 {item.label}
@@ -98,45 +102,45 @@ function Dropdown({ label, items }: { label: string; items: NavItem[] }) {
 }
 
 const ROL_LABEL: Record<string, string> = {
-  administrador: "Admin",
-  tecnico: "Tecnico",
-  coordinador: "Coordinador",
+  administrador: 'Admin',
+  tecnico: 'Tecnico',
+  coordinador: 'Coordinador',
 };
 
 function getNavForRole(rol: string) {
-  const mainItems: NavItem[] = [{ label: "Inicio", href: "/" }];
+  const mainItems: NavItem[] = [{ label: 'Inicio', href: '/' }];
 
-  if (rol === "administrador" || rol === "coordinador") {
-    mainItems.push({ label: "Dashboard", href: "/dashboard" });
-  } else if (rol === "tecnico") {
-    mainItems.push({ label: "Dashboard", href: "/dashboard-tecnico" });
+  if (rol === 'administrador' || rol === 'coordinador') {
+    mainItems.push({ label: 'Dashboard', href: '/dashboard' });
+  } else if (rol === 'tecnico') {
+    mainItems.push({ label: 'Dashboard', href: '/dashboard-tecnico' });
   }
 
-  mainItems.push({ label: "Equipos", href: "/equipos" });
+  mainItems.push({ label: 'Equipos', href: '/equipos' });
 
   const opsItems: NavItem[] = [];
-  if (rol === "administrador" || rol === "coordinador") {
-    opsItems.push({ label: "Incidencias", href: "/incidencias" });
-    opsItems.push({ label: "Problemas", href: "/problemas" });
-    opsItems.push({ label: "Calibraciones", href: "/calibraciones" });
-    opsItems.push({ label: "Reportes", href: "/reportes" });
-  } else if (rol === "tecnico") {
-    opsItems.push({ label: "Incidencias", href: "/incidencias" });
-    opsItems.push({ label: "Calibraciones", href: "/calibraciones" });
+  if (rol === 'administrador' || rol === 'coordinador') {
+    opsItems.push({ label: 'Incidencias', href: '/incidencias' });
+    opsItems.push({ label: 'Problemas', href: '/problemas' });
+    opsItems.push({ label: 'Calibraciones', href: '/calibraciones' });
+    opsItems.push({ label: 'Reportes', href: '/reportes' });
+  } else if (rol === 'tecnico') {
+    opsItems.push({ label: 'Incidencias', href: '/incidencias' });
+    opsItems.push({ label: 'Calibraciones', href: '/calibraciones' });
   }
 
   const afterItems: NavItem[] = [];
-  if (rol !== "tecnico") {
-    afterItems.push({ label: "Lecturas", href: "/lecturas" });
+  if (rol !== 'tecnico') {
+    afterItems.push({ label: 'Lecturas', href: '/lecturas' });
   }
 
   const adminItems: NavItem[] = [];
-  if (rol === "administrador") {
-    adminItems.push({ label: "Repuestos", href: "/repuestos" });
-    adminItems.push({ label: "Proveedores", href: "/proveedores" });
-    adminItems.push({ label: "Usuarios", href: "/usuarios" });
-  } else if (rol === "tecnico") {
-    adminItems.push({ label: "Repuestos", href: "/repuestos" });
+  if (rol === 'administrador') {
+    adminItems.push({ label: 'Repuestos', href: '/repuestos' });
+    adminItems.push({ label: 'Proveedores', href: '/proveedores' });
+    adminItems.push({ label: 'Usuarios', href: '/usuarios' });
+  } else if (rol === 'tecnico') {
+    adminItems.push({ label: 'Repuestos', href: '/repuestos' });
   }
 
   return { mainItems, opsItems, afterItems, adminItems };
@@ -146,7 +150,7 @@ export default function Header() {
   const pathname = usePathname();
   const { user, isAuthenticated, logout } = useAuth();
 
-  const rol = user?.rol ?? "coordinador";
+  const rol = user?.rol ?? 'coordinador';
   const { mainItems, opsItems, afterItems, adminItems } = getNavForRole(rol);
 
   return (
@@ -161,8 +165,8 @@ export default function Header() {
         <nav className="flex items-center gap-1">
           {mainItems.map((item) => {
             const isActive =
-              item.href === "/"
-                ? pathname === "/"
+              item.href === '/'
+                ? pathname === '/'
                 : pathname.startsWith(item.href);
             return (
               <NavLink

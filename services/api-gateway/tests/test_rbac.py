@@ -73,7 +73,9 @@ def test_coordinador_cannot_write_usuarios():
 
 # -- Proveedores: admin only --
 def test_admin_can_write_proveedores():
-    assert check_write_permission("/api/v1/proveedores", "POST", "administrador") is True
+    assert (
+        check_write_permission("/api/v1/proveedores", "POST", "administrador") is True
+    )
 
 
 def test_tecnico_cannot_write_proveedores():
@@ -112,7 +114,9 @@ def test_coordinador_cannot_write_repuestos():
 
 # -- Incidencias: coordinador + admin (not tecnico) --
 def test_admin_can_write_incidencias():
-    assert check_write_permission("/api/v1/incidencias", "POST", "administrador") is True
+    assert (
+        check_write_permission("/api/v1/incidencias", "POST", "administrador") is True
+    )
 
 
 def test_coordinador_can_write_incidencias():
@@ -138,11 +142,15 @@ def test_coordinador_can_submit_mantenimiento():
 
 # -- Calibraciones: coordinador + admin --
 def test_admin_can_write_calibraciones():
-    assert check_write_permission("/api/v1/calibraciones", "POST", "administrador") is True
+    assert (
+        check_write_permission("/api/v1/calibraciones", "POST", "administrador") is True
+    )
 
 
 def test_coordinador_can_write_calibraciones():
-    assert check_write_permission("/api/v1/calibraciones", "POST", "coordinador") is True
+    assert (
+        check_write_permission("/api/v1/calibraciones", "POST", "coordinador") is True
+    )
 
 
 def test_tecnico_cannot_write_calibraciones():
@@ -323,7 +331,9 @@ def test_tecnico_cannot_post_calibracion():
 
 
 def test_coordinador_can_post_calibracion():
-    assert check_write_permission("/api/v1/calibraciones", "POST", "coordinador") is True
+    assert (
+        check_write_permission("/api/v1/calibraciones", "POST", "coordinador") is True
+    )
 
 
 # -- C8: confirmar equipo en cuarentena lo pueden hacer coordinador/admin --

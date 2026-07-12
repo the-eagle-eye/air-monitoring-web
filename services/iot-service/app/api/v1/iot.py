@@ -88,7 +88,9 @@ def get_readings(
 ):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
     if not equipo:
-        raise HTTPException(status_code=404, detail=f"Equipo '{device_id}' no encontrado")
+        raise HTTPException(
+            status_code=404, detail=f"Equipo '{device_id}' no encontrado"
+        )
 
     query = (
         db.query(LecturaIoT)
@@ -110,7 +112,9 @@ def get_readings(
 def get_latest_reading(device_id: str, db: Session = Depends(get_db)):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
     if not equipo:
-        raise HTTPException(status_code=404, detail=f"Equipo '{device_id}' no encontrado")
+        raise HTTPException(
+            status_code=404, detail=f"Equipo '{device_id}' no encontrado"
+        )
 
     lectura = (
         db.query(LecturaIoT)
@@ -183,7 +187,10 @@ def confirmar_equipo(
     if equipo.estado != ESTADO_NO_CONFIRMADO:
         raise HTTPException(
             status_code=409,
-            detail=f"Equipo '{device_id}' no está en cuarentena (estado: {equipo.estado})",
+            detail=(
+                f"Equipo '{device_id}' no está en cuarentena "
+                f"(estado: {equipo.estado})"
+            ),
         )
     # completar metadatos provistos (solo los enviados) y activar
     for field, value in data.model_dump(exclude_unset=True).items():

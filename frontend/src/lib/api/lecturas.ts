@@ -17,7 +17,9 @@ export async function fetchEquipos(): Promise<Equipo[]> {
 }
 
 export async function fetchEquipo(deviceId: string): Promise<Equipo> {
-  return apiFetch<Equipo>(`/api/v1/iot/equipos/${deviceId}`, { service: 'iot' });
+  return apiFetch<Equipo>(`/api/v1/iot/equipos/${deviceId}`, {
+    service: 'iot',
+  });
 }
 
 export async function createEquipo(
@@ -41,7 +43,9 @@ export async function updateEquipo(
   });
 }
 
-export async function deleteEquipo(deviceId: string): Promise<{ detail: string }> {
+export async function deleteEquipo(
+  deviceId: string,
+): Promise<{ detail: string }> {
   return apiFetch<{ detail: string }>(`/api/v1/iot/equipos/${deviceId}`, {
     service: 'iot',
     method: 'DELETE',
@@ -50,12 +54,16 @@ export async function deleteEquipo(deviceId: string): Promise<{ detail: string }
 
 // C8: onboarding automático — equipos en cuarentena (estado no_confirmado).
 export async function fetchEquiposPendientes(): Promise<Equipo[]> {
-  return apiFetch<Equipo[]>('/api/v1/iot/equipos/pendientes', { service: 'iot' });
+  return apiFetch<Equipo[]>('/api/v1/iot/equipos/pendientes', {
+    service: 'iot',
+  });
 }
 
 export async function confirmarEquipo(
   deviceId: string,
-  data: Partial<Omit<Equipo, 'id' | 'device_id' | 'fecha_registro' | 'estado'>> = {},
+  data: Partial<
+    Omit<Equipo, 'id' | 'device_id' | 'fecha_registro' | 'estado'>
+  > = {},
 ): Promise<Equipo> {
   return apiFetch<Equipo>(`/api/v1/iot/equipos/${deviceId}/confirmar`, {
     service: 'iot',

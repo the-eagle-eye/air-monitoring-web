@@ -26,7 +26,9 @@ def build_feature_vector(reading: LecturaIoT) -> dict[str, float | None]:
     any additional sensors the datalogger reported.
     """
     sensors = reading.sensors or {}
-    vector: dict[str, float | None] = {field: sensors.get(field) for field in SENSOR_FIELDS}
+    vector: dict[str, float | None] = {
+        field: sensors.get(field) for field in SENSOR_FIELDS
+    }
     for k, v in sensors.items():
         if k not in vector:
             vector[k] = v

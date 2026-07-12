@@ -29,6 +29,7 @@ class _OpsMock:
 
     def get(self, url, params=None, timeout=None):
         cap = self
+
         class _R:
             status_code = 200
             def raise_for_status(self): return None
@@ -37,6 +38,7 @@ class _OpsMock:
 
     def put(self, url, json=None, timeout=None):
         self.puts.append({"url": url, "json": json})
+
         class _R:
             status_code = 200
             def raise_for_status(self): return None

@@ -27,9 +27,14 @@ interface IncidenciasSummaryProps {
   incidencias: Incidencia[];
 }
 
-export default function IncidenciasSummary({ incidencias }: IncidenciasSummaryProps) {
+export default function IncidenciasSummary({
+  incidencias,
+}: IncidenciasSummaryProps) {
   const recent = [...incidencias]
-    .sort((a, b) => parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime())
+    .sort(
+      (a, b) =>
+        parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime(),
+    )
     .slice(0, 8);
 
   return (
@@ -57,7 +62,10 @@ export default function IncidenciasSummary({ incidencias }: IncidenciasSummaryPr
             >
               <div className="flex items-center gap-2">
                 <Badge
-                  label={inc.prioridad.charAt(0).toUpperCase() + inc.prioridad.slice(1)}
+                  label={
+                    inc.prioridad.charAt(0).toUpperCase() +
+                    inc.prioridad.slice(1)
+                  }
                   variant={PRIORIDAD_VARIANT[inc.prioridad] ?? 'default'}
                 />
                 <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">

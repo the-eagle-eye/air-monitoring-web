@@ -55,7 +55,12 @@ export default function EquipoForm({
   }
 
   const fields = [
-    { name: 'device_id', label: 'Device ID', required: true, disabled: mode === 'edit' },
+    {
+      name: 'device_id',
+      label: 'Device ID',
+      required: true,
+      disabled: mode === 'edit',
+    },
     { name: 'nombre', label: 'Nombre' },
     { name: 'tipo', label: 'Tipo' },
     { name: 'ubicacion', label: 'Ubicacion' },
@@ -69,7 +74,9 @@ export default function EquipoForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -122,7 +129,11 @@ export default function EquipoForm({
           disabled={submitting}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
         >
-          {submitting ? 'Guardando...' : mode === 'create' ? 'Crear Equipo' : 'Guardar Cambios'}
+          {submitting
+            ? 'Guardando...'
+            : mode === 'create'
+              ? 'Crear Equipo'
+              : 'Guardar Cambios'}
         </button>
         <button
           type="button"

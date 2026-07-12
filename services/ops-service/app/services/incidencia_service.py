@@ -3,15 +3,15 @@ from datetime import date, datetime, timezone, timedelta
 
 import httpx
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import desc, func
-
-logger = logging.getLogger(__name__)
+from sqlalchemy import desc
 
 from app.models.incidencia import Incidencia
 from app.models.calibracion import Calibracion
 from app.models.usuario import Usuario
 from app.schemas.incidencia import IncidenciaCreate, IncidenciaUpdate
 from app.services import email_service, priority_service
+
+logger = logging.getLogger(__name__)
 
 # ITIL: ciclo de vida — transiciones permitidas por estado (I2.2).
 VALID_TRANSITIONS: dict[str, tuple[str, ...]] = {
@@ -268,6 +268,8 @@ def _device_in_maintenance_window(db: Session, device_id: str) -> bool:
         )
         .first()
     ) is not None
+
+
 # severidad del ensemble -> prioridad del incidente
 _SEVERITY_PRIORITY = {
     "OBSERVADO": "baja",
@@ -292,7 +294,7 @@ def create_or_escalate_monitor_incidencia(
     - C9: si el equipo está en ventana de mantenimiento (correctiva en_ejecucion),
       silencia por completo (accion 'maintenance').
 
-    Retorna (incidencia, accion) donde accion in {created, escalated, noop, maintenance}.
+    Retorna (incidencia, accion): accion in {created, escalated, noop, maintenance}.
     """
     urgencia = priority_service.urgency_from_severity(severidad)
     if severidad not in _SEVERITY_PRIORITY:

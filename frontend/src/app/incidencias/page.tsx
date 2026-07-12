@@ -34,29 +34,40 @@ export default function IncidenciasPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const pageSize = 50;
 
-  const loadData = useCallback((silent = false) => {
-    if (!silent) setLoading(true);
-    fetchIncidencias({
-      device_id: filterDevice || undefined,
-      tipo: 'correctiva',
-      estado: filterEstado || undefined,
-      page,
-      page_size: pageSize,
-    })
-      .then((res) => {
-        setIncidencias(res.items);
-        setTotal(res.total);
-        setLastUpdated(new Date());
+  const loadData = useCallback(
+    (silent = false) => {
+      if (!silent) setLoading(true);
+      fetchIncidencias({
+        device_id: filterDevice || undefined,
+        tipo: 'correctiva',
+        estado: filterEstado || undefined,
+        page,
+        page_size: pageSize,
       })
-      .catch((err) => { if (!silent) setError(err.message); })
-      .finally(() => { if (!silent) setLoading(false); });
-  }, [filterDevice, filterEstado, page]);
+        .then((res) => {
+          setIncidencias(res.items);
+          setTotal(res.total);
+          setLastUpdated(new Date());
+        })
+        .catch((err) => {
+          if (!silent) setError(err.message);
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [filterDevice, filterEstado, page],
+  );
 
   useEffect(() => {
-    fetchEquipos().then(setEquipos).catch(() => {});
+    fetchEquipos()
+      .then(setEquipos)
+      .catch(() => {});
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   usePolling(() => loadData(true), 30_000);
 
@@ -82,7 +93,9 @@ export default function IncidenciasPage() {
       header: 'Prioridad',
       render: (item: Incidencia) => (
         <Badge
-          label={item.prioridad.charAt(0).toUpperCase() + item.prioridad.slice(1)}
+          label={
+            item.prioridad.charAt(0).toUpperCase() + item.prioridad.slice(1)
+          }
           variant={PRIORIDAD_VARIANT[item.prioridad] ?? 'default'}
         />
       ),
@@ -100,7 +113,8 @@ export default function IncidenciasPage() {
     {
       key: 'created_at',
       header: 'Fecha',
-      render: (item: Incidencia) => new Date(item.created_at).toLocaleDateString(),
+      render: (item: Incidencia) =>
+        new Date(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -159,7 +173,10 @@ export default function IncidenciasPage() {
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <select
           value={filterDevice}
-          onChange={(e) => { setFilterDevice(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setFilterDevice(e.target.value);
+            setPage(1);
+          }}
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
         >
           <option value="">Todos los equipos</option>
@@ -172,7 +189,10 @@ export default function IncidenciasPage() {
 
         <select
           value={filterEstado}
-          onChange={(e) => { setFilterEstado(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setFilterEstado(e.target.value);
+            setPage(1);
+          }}
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
         >
           <option value="">Todos los estados</option>
@@ -186,13 +206,19 @@ export default function IncidenciasPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <DataTable columns={columns} data={incidencias} keyExtractor={(i) => i.id} />
+        <DataTable
+          columns={columns}
+          data={incidencias}
+          keyExtractor={(i) => i.id}
+        />
       )}
 
       {totalPages > 1 && (

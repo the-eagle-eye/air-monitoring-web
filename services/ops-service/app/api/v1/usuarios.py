@@ -3,7 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.usuario import Usuario
-from app.schemas.usuario import UsuarioCreate, UsuarioResponse, UsuarioUpdate, UsuarioWithHash
+from app.schemas.usuario import (
+    UsuarioCreate,
+    UsuarioResponse,
+    UsuarioUpdate,
+    UsuarioWithHash,
+)
 
 router = APIRouter()
 

@@ -7,16 +7,35 @@ import { useAuth } from '@/lib/auth';
 // Routes accessible by role
 const ROLE_ROUTES: Record<string, string[]> = {
   administrador: [
-    '/', '/dashboard', '/equipos', '/incidencias', '/problemas', '/calibraciones',
+    '/',
+    '/dashboard',
+    '/equipos',
+    '/incidencias',
+    '/problemas',
+    '/calibraciones',
     '/lecturas',
-    '/repuestos', '/proveedores', '/usuarios', '/reportes',
+    '/repuestos',
+    '/proveedores',
+    '/usuarios',
+    '/reportes',
   ],
   coordinador: [
-    '/', '/dashboard', '/equipos', '/incidencias', '/problemas', '/calibraciones',
-    '/lecturas', '/reportes',
+    '/',
+    '/dashboard',
+    '/equipos',
+    '/incidencias',
+    '/problemas',
+    '/calibraciones',
+    '/lecturas',
+    '/reportes',
   ],
   tecnico: [
-    '/', '/dashboard-tecnico', '/equipos', '/incidencias', '/calibraciones', '/repuestos',
+    '/',
+    '/dashboard-tecnico',
+    '/equipos',
+    '/incidencias',
+    '/calibraciones',
+    '/repuestos',
   ],
 };
 
@@ -39,11 +58,15 @@ function isRouteAllowed(pathname: string, rol: string): boolean {
   const allowed = ROLE_ROUTES[rol];
   if (!allowed) return true;
   return allowed.some((route) =>
-    route === '/' ? pathname === '/' : pathname.startsWith(route)
+    route === '/' ? pathname === '/' : pathname.startsWith(route),
   );
 }
 
-export default function RouteGuard({ children }: { children: React.ReactNode }) {
+export default function RouteGuard({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated, loading } = useAuth();

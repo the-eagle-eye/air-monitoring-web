@@ -64,7 +64,10 @@ def setup_db():
         db.add_all([
             Repuesto(nombre="Sensor SO2", categoria="Sensores y Detectores"),
             Repuesto(nombre="Filtro PTFE", categoria="Filtros y Consumibles"),
-            Repuesto(nombre="Bomba de vacio", categoria="Bombas y Sistemas de Muestreo"),
+            Repuesto(
+                nombre="Bomba de vacio",
+                categoria="Bombas y Sistemas de Muestreo",
+            ),
         ])
         db.add(Datalogger(
             nombre="CR310 Test", codigo_interno="DL-TEST-001",

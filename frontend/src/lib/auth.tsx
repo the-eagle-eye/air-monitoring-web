@@ -46,7 +46,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const savedToken = localStorage.getItem('token');
     const savedRefresh = localStorage.getItem('refresh_token');
-    const savedUser = localStorage.getItem('user');
 
     if (!savedToken) {
       setLoading(false);
@@ -100,7 +99,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(res.usuario);
       }
       setToken(res.access_token);
-      const rolDest = res.usuario?.rol === 'tecnico' ? '/dashboard-tecnico' : '/dashboard';
+      const rolDest =
+        res.usuario?.rol === 'tecnico' ? '/dashboard-tecnico' : '/dashboard';
       router.replace(rolDest);
     },
     [router],

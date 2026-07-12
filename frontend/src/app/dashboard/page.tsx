@@ -19,7 +19,11 @@ import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
 import { fetchHealthStates } from '@/lib/api/healthMonitor';
 import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
 import type { HealthDeviceState, HealthState } from '@/types/healthMonitor';
-import type { DashboardData, KpiData, RiskDistribution } from '@/types/dashboard';
+import type {
+  DashboardData,
+  KpiData,
+  RiskDistribution,
+} from '@/types/dashboard';
 import type { LecturaIoT } from '@/types/lectura';
 import type { Incidencia, CalibracionOps } from '@/types/ops';
 
@@ -84,7 +88,8 @@ function computeHealthDistribution(
 export default function DashboardPage() {
   const { user } = useAuth();
   // Coordinador/admin gestionan problemas (crear a partir de reincidentes).
-  const canCrearProblema = user?.rol === 'coordinador' || user?.rol === 'administrador';
+  const canCrearProblema =
+    user?.rol === 'coordinador' || user?.rol === 'administrador';
   const [dashData, setDashData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +98,12 @@ export default function DashboardPage() {
   const [lecturas, setLecturas] = useState<LecturaIoT[]>([]);
   const [lecturasLoading, setLecturasLoading] = useState(false);
   const [openIncidencias, setOpenIncidencias] = useState<Incidencia[]>([]);
-  const [pendingCalibraciones, setPendingCalibraciones] = useState<CalibracionOps[]>([]);
-  const [healthStates, setHealthStates] = useState<Record<string, HealthDeviceState | null>>({});
+  const [pendingCalibraciones, setPendingCalibraciones] = useState<
+    CalibracionOps[]
+  >([]);
+  const [healthStates, setHealthStates] = useState<
+    Record<string, HealthDeviceState | null>
+  >({});
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   const selectedEquipoRef = useRef(selectedEquipo);
@@ -114,18 +123,41 @@ export default function DashboardPage() {
           .then(setHealthStates)
           .catch(() => {});
       })
-      .catch((err) => { if (!silent) setError(err.message); })
-      .finally(() => { if (!silent) setLoading(false); });
+      .catch((err) => {
+        if (!silent) setError(err.message);
+      })
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
 
     Promise.all([
-      fetchIncidencias({ tipo: 'correctiva', estado: 'pendiente', page_size: 50 }),
-      fetchIncidencias({ tipo: 'correctiva', estado: 'en_ejecucion', page_size: 50 }),
+      fetchIncidencias({
+        tipo: 'correctiva',
+        estado: 'pendiente',
+        page_size: 50,
+      }),
+      fetchIncidencias({
+        tipo: 'correctiva',
+        estado: 'en_ejecucion',
+        page_size: 50,
+      }),
     ])
-      .then(([pend, ejec]) => setOpenIncidencias([...pend.items, ...ejec.items]))
+      .then(([pend, ejec]) =>
+        setOpenIncidencias([...pend.items, ...ejec.items]),
+      )
       .catch(() => {});
 
     fetchCalibracionesOps({ page_size: 100 })
-      .then((res) => setPendingCalibraciones(res.items.filter((c) => !c.fecha_calibracion && c.incidencia_estado !== 'finalizado' && c.incidencia_estado !== 'cancelado')))
+      .then((res) =>
+        setPendingCalibraciones(
+          res.items.filter(
+            (c) =>
+              !c.fecha_calibracion &&
+              c.incidencia_estado !== 'finalizado' &&
+              c.incidencia_estado !== 'cancelado',
+          ),
+        ),
+      )
       .catch(() => {});
   }, []);
 
@@ -136,10 +168,14 @@ export default function DashboardPage() {
     fetchEquipoLecturas(equipo)
       .then(setLecturas)
       .catch(() => setLecturas([]))
-      .finally(() => { if (!silent) setLecturasLoading(false); });
+      .finally(() => {
+        if (!silent) setLecturasLoading(false);
+      });
   }, []);
 
-  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  useEffect(() => {
+    loadDashboard();
+  }, [loadDashboard]);
 
   useEffect(() => {
     if (!selectedEquipo) {
@@ -149,7 +185,10 @@ export default function DashboardPage() {
     loadEquipoData();
   }, [selectedEquipo, loadEquipoData]);
 
-  usePolling(() => { loadDashboard(true); loadEquipoData(true); }, 30_000);
+  usePolling(() => {
+    loadDashboard(true);
+    loadEquipoData(true);
+  }, 30_000);
 
   if (loading) {
     return (
@@ -209,12 +248,18 @@ export default function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <RiskDistributionChart data={healthDist} />
-        <EquiposAtencion states={healthStates} openIncidencias={openIncidencias} />
+        <EquiposAtencion
+          states={healthStates}
+          openIncidencias={openIncidencias}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <IncidenciasSummary incidencias={openIncidencias} />
-        <EquiposReincidentes canCrear={canCrearProblema} onProblemaCreado={() => loadDashboard(true)} />
+        <EquiposReincidentes
+          canCrear={canCrearProblema}
+          onProblemaCreado={() => loadDashboard(true)}
+        />
       </div>
 
       <ProximasCalibraciones calibraciones={pendingCalibraciones} />

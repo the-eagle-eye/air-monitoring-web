@@ -17,7 +17,10 @@ interface IncidenciaFormProps {
   onCancel: () => void;
 }
 
-export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormProps) {
+export default function IncidenciaForm({
+  onSubmit,
+  onCancel,
+}: IncidenciaFormProps) {
   const [equipos, setEquipos] = useState<Equipo[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [form, setForm] = useState({
@@ -31,8 +34,12 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchEquipos().then(setEquipos).catch(() => {});
-    fetchUsuarios().then(setUsuarios).catch(() => {});
+    fetchEquipos()
+      .then(setEquipos)
+      .catch(() => {});
+    fetchUsuarios()
+      .then(setUsuarios)
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -68,7 +75,9 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -78,7 +87,9 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
           </label>
           <select
             value={form.device_id}
-            onChange={(e) => setForm((prev) => ({ ...prev, device_id: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, device_id: e.target.value }))
+            }
             required
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
           >
@@ -96,7 +107,9 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
           </label>
           <select
             value={form.tipo}
-            onChange={(e) => setForm((prev) => ({ ...prev, tipo: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, tipo: e.target.value }))
+            }
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
           >
             <option value="correctiva">Correctiva</option>
@@ -110,7 +123,9 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
           </label>
           <select
             value={form.prioridad}
-            onChange={(e) => setForm((prev) => ({ ...prev, prioridad: e.target.value }))}
+            onChange={(e) =>
+              setForm((prev) => ({ ...prev, prioridad: e.target.value }))
+            }
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
           >
             <option value="alta">Alta</option>
@@ -131,7 +146,9 @@ export default function IncidenciaForm({ onSubmit, onCancel }: IncidenciaFormPro
             required
             className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
           >
-            <option value="" disabled>Seleccionar responsable</option>
+            <option value="" disabled>
+              Seleccionar responsable
+            </option>
             {usuarios.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.nombre} {u.apellido} ({u.rol})

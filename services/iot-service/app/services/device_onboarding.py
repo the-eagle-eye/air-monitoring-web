@@ -18,8 +18,8 @@ Endurecimiento futuro (backlog): API key por equipo para autenticar los CR310.
 import re
 
 # Formato de device_id de las estaciones OEFA. Cubre los dos esquemas reales:
-#   - Thermo/laboratorio:  T + 3 dígitos            (T101, T999)
-#   - Estación de campo:   CA-<segmento>-<segmento>  (CA-CH-04, CA-CHILLO-01, CA-UCHU-01)
+#   - Thermo/laboratorio:  T + 3 dígitos           (T101, T999)
+#   - Estación de campo:   CA-<seg>-<seg>          (CA-CH-04, CA-CHILLO-01)
 # Rechaza typos y basura: minúsculas (t101), truncados (T10, CA-), inyección, etc.
 DEVICE_ID_PATTERN = re.compile(r"^(T\d{3}|CA-[A-Z0-9]+-[A-Z0-9]+)$")
 
@@ -30,5 +30,5 @@ ESTADO_ACTIVO = "activo"
 
 
 def is_valid_device_id(device_id: str) -> bool:
-    """True si el device_id cumple el formato de estación OEFA (apto para onboarding)."""
+    """True si el device_id cumple el formato OEFA (apto para onboarding)."""
     return bool(DEVICE_ID_PATTERN.match(device_id or ""))
