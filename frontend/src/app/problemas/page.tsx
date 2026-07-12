@@ -8,7 +8,10 @@ import DataTable from '@/components/ui/DataTable';
 import Badge from '@/components/ui/Badge';
 import type { Problema } from '@/types/ops';
 
-const ESTADO_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'default'> = {
+const ESTADO_VARIANT: Record<
+  string,
+  'success' | 'warning' | 'danger' | 'info' | 'default'
+> = {
   abierto: 'danger',
   investigacion: 'warning',
   resuelto: 'success',
@@ -49,19 +52,28 @@ export default function ProblemasPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const loadData = useCallback((silent = false) => {
-    if (!silent) setLoading(true);
-    fetchProblemas({ estado: filterEstado || undefined })
-      .then((res) => {
-        setProblemas(res.items);
-        setTotal(res.total);
-        setLastUpdated(new Date());
-      })
-      .catch((err) => { if (!silent) setError(err.message); })
-      .finally(() => { if (!silent) setLoading(false); });
-  }, [filterEstado]);
+  const loadData = useCallback(
+    (silent = false) => {
+      if (!silent) setLoading(true);
+      fetchProblemas({ estado: filterEstado || undefined })
+        .then((res) => {
+          setProblemas(res.items);
+          setTotal(res.total);
+          setLastUpdated(new Date());
+        })
+        .catch((err) => {
+          if (!silent) setError(err.message);
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [filterEstado],
+  );
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   usePolling(() => loadData(true), 30_000);
 
@@ -85,7 +97,9 @@ export default function ProblemasPage() {
       setShowForm(false);
       loadData(false);
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Error al crear el problema.');
+      setFormError(
+        err instanceof Error ? err.message : 'Error al crear el problema.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -107,7 +121,8 @@ export default function ProblemasPage() {
     {
       key: 'created_at',
       header: 'Fecha',
-      render: (item: Problema) => new Date(item.created_at).toLocaleDateString(),
+      render: (item: Problema) =>
+        new Date(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -188,7 +203,9 @@ export default function ProblemasPage() {
             </div>
 
             {formError && (
-              <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{formError}</div>
+              <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+                {formError}
+              </div>
             )}
 
             <div className="flex gap-3">
@@ -228,13 +245,19 @@ export default function ProblemasPage() {
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <DataTable columns={columns} data={problemas} keyExtractor={(p) => p.id} />
+        <DataTable
+          columns={columns}
+          data={problemas}
+          keyExtractor={(p) => p.id}
+        />
       )}
     </div>
   );

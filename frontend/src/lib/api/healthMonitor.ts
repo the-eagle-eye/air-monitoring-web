@@ -27,25 +27,20 @@ export async function fetchHealthState(
 }
 
 // Evalúa una lectura contra el ensemble (uso interno / pruebas).
-export async function evaluateReading(
-  reading: {
-    device_id: string;
-    timestamp: string;
-    so2_ppb?: number | null;
-    so2_flow?: number | null;
-    so2_internal_temp?: number | null;
-    so2_lamp_int?: number | null;
-    valido: number;
-  },
-): Promise<HealthEvaluateResponse> {
-  return apiFetch<HealthEvaluateResponse>(
-    '/api/v1/health-monitor/evaluate',
-    {
-      service: 'gateway',
-      method: 'POST',
-      body: JSON.stringify(reading),
-    },
-  );
+export async function evaluateReading(reading: {
+  device_id: string;
+  timestamp: string;
+  so2_ppb?: number | null;
+  so2_flow?: number | null;
+  so2_internal_temp?: number | null;
+  so2_lamp_int?: number | null;
+  valido: number;
+}): Promise<HealthEvaluateResponse> {
+  return apiFetch<HealthEvaluateResponse>('/api/v1/health-monitor/evaluate', {
+    service: 'gateway',
+    method: 'POST',
+    body: JSON.stringify(reading),
+  });
 }
 
 // Estado de varios equipos (para el semáforo agregado). Tolera 404 por equipo

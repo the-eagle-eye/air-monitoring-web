@@ -14,17 +14,17 @@ import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
 function VerdictBadge({ verdict }: { verdict: boolean | null }) {
   if (verdict == null) {
     return (
-      <span className="rounded px-2 py-0.5 text-xs font-medium bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+      <span className="rounded bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
         Sin dato
       </span>
     );
   }
   return verdict ? (
-    <span className="rounded px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+    <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
       Anomalía
     </span>
   ) : (
-    <span className="rounded px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+    <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
       Normal
     </span>
   );
@@ -44,8 +44,12 @@ function DetectorRow({
   return (
     <div className="flex items-start justify-between gap-4 py-2">
       <div>
-        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{name}</div>
-        <div className="text-xs text-zinc-500 dark:text-zinc-400">{description}</div>
+        <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+          {name}
+        </div>
+        <div className="text-xs text-zinc-500 dark:text-zinc-400">
+          {description}
+        </div>
         {detail && (
           <div className="mt-0.5 font-mono text-xs text-zinc-400">{detail}</div>
         )}
@@ -69,9 +73,11 @@ export default function DetectorBreakdownPanel({
   const cfg = HEALTH_STATE_CONFIG[health_state];
 
   const fmt = (v: number | null) =>
-    v == null ? 'n/a' : Math.abs(v) >= 1000 || (v !== 0 && Math.abs(v) < 0.001)
-      ? v.toExponential(2)
-      : v.toFixed(4);
+    v == null
+      ? 'n/a'
+      : Math.abs(v) >= 1000 || (v !== 0 && Math.abs(v) < 0.001)
+        ? v.toExponential(2)
+        : v.toFixed(4);
 
   return (
     <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-700 dark:bg-zinc-900">
@@ -79,8 +85,8 @@ export default function DetectorBreakdownPanel({
         ¿Por qué este estado? — desglose de detectores
       </h3>
       <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-        El ensemble marca una alerta sólo cuando los <strong>dos</strong> detectores
-        coinciden (compuerta AND). Última lectura evaluada.
+        El ensemble marca una alerta sólo cuando los <strong>dos</strong>{' '}
+        detectores coinciden (compuerta AND). Última lectura evaluada.
       </p>
 
       <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -103,7 +109,9 @@ export default function DetectorBreakdownPanel({
       </div>
 
       <div className="mt-3 flex items-center justify-between rounded-md bg-zinc-50 px-3 py-2 dark:bg-zinc-800/50">
-        <span className="text-sm text-zinc-500 dark:text-zinc-400">Estado publicado</span>
+        <span className="text-sm text-zinc-500 dark:text-zinc-400">
+          Estado publicado
+        </span>
         <span className="text-sm font-semibold" style={{ color: cfg.color }}>
           {cfg.emoji} {cfg.label}
         </span>

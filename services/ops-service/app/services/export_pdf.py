@@ -81,7 +81,10 @@ def generate_pdf(
     if not rango:
         rango = "Todas las fechas"
     elements.append(Paragraph(
-        f"{rango}  |  Generado: {date.today().isoformat()}  |  Total registros: {len(rows)}",
+        (
+            f"{rango}  |  Generado: {date.today().isoformat()}  |  "
+            f"Total registros: {len(rows)}"
+        ),
         subtitle_style,
     ))
 

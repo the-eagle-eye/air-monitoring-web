@@ -3,10 +3,9 @@ from datetime import date, datetime, timedelta, timezone
 
 from app.models.incidencia import Incidencia
 from app.models.calibracion import Calibracion
-from app.services import incidencia_service, mantenimiento_service, calibracion_service
+from app.services import incidencia_service, calibracion_service
 from app.schemas.incidencia import IncidenciaCreate, IncidenciaUpdate
 from app.schemas.calibracion import CalibracionCreate
-from app.schemas.mantenimiento import MantenimientoCreate
 
 
 def _finalizar(db, inc_id):
@@ -20,7 +19,7 @@ def _finalizar(db, inc_id):
 
 class TestIncidenciaService:
     def test_auto_create_calibracion_on_finalize(self, db_session):
-        """When a correctiva incidencia is finalized, a calibracion incidencia is auto-created."""
+        """Correctiva finalizada -> se auto-crea una incidencia de calibracion."""
         inc = incidencia_service.create_incidencia(
             db_session,
             IncidenciaCreate(
@@ -73,7 +72,7 @@ class TestIncidenciaService:
 
 class TestCalibracionDirectCreation:
     def test_create_calibracion_without_incidencia(self, db_session):
-        """Creating a calibracion without incidencia_id should NOT auto-create an incidencia."""
+        """Calibracion sin incidencia_id NO auto-crea una incidencia."""
         cal = calibracion_service.create_calibracion(
             db_session,
             CalibracionCreate(device_id="T101", nota="Direct calibracion"),
@@ -101,9 +100,8 @@ class TestCalibracionDirectCreation:
         assert cal.estado == "pendiente"
 
     def test_complete_direct_calibracion_no_incidencia(self, db_session):
-        """Completing a direct calibracion should set estado=completada without creating incidencia."""
+        """Completar calibracion directa: estado=completada sin crear incidencia."""
         from app.schemas.calibracion import CalibracionUpdate
-        from datetime import datetime, timezone
 
         cal = calibracion_service.create_calibracion(
             db_session,
@@ -232,7 +230,12 @@ class TestAutoCalibrationCoordinador:
 
         mock_email.assert_called_once()
         call_args = mock_email.call_args
-        assert call_args[1].get("motivo", call_args[0][3] if len(call_args[0]) > 3 else None) == "post_correctiva" or call_args.kwargs.get("motivo") == "post_correctiva"
+        pos_motivo = call_args[0][3] if len(call_args[0]) > 3 else None
+        motivo = call_args[1].get("motivo", pos_motivo)
+        assert (
+            motivo == "post_correctiva"
+            or call_args.kwargs.get("motivo") == "post_correctiva"
+        )
 
 
 class TestAnnualCalibration:

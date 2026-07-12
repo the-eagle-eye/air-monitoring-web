@@ -1,5 +1,4 @@
 from unittest.mock import AsyncMock, patch, MagicMock
-import json
 
 import pytest
 from fastapi.testclient import TestClient

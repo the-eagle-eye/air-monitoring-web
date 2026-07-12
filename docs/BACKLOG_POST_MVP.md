@@ -103,3 +103,21 @@ están implementados y verificados; se listan para dar contexto.
     `estado=activo`). No molesta con pocos usuarios, pero al crecer el catálogo conviene:
     query params `?rol=&estado=&page=&page_size=`, y que el frontend consuma esa lista
     ya filtrada. Descubierto al corregir la re-asignación de incidencias (fix 2026-07-05).
+19. **Refactor patrones React 19 en frontend** (2026-07-12) — Al pasar el CI de
+    frontend, `eslint-config-next` (Next 16 + React 19) activó dos reglas nuevas
+    como error que se bajaron a **warn** en `eslint.config.mjs` para no bloquear
+    el pipeline. Deuda: refactorizar los 6 componentes flageados y volver a subir
+    las reglas a `error`.
+    - `react-hooks/set-state-in-effect` (5): `dashboard-tecnico/page.tsx:89`,
+      `equipos/[deviceId]/page.tsx:234`, `incidencias/page.tsx:69`,
+      `lecturas/page.tsx:33`, `components/dashboard/AnomalyTrendsChart.tsx:26`.
+      Fix típico: mover el `setState` a un event handler o derivarlo del render.
+    - `react-hooks/refs` (1): `dashboard/page.tsx:110` — mutar `ref.current`
+      durante el render. Fix: hacerlo dentro de un `useEffect`.
+20. **Reactivar cron de Daily Calibration Check** (2026-07-12) — El workflow
+    `.github/workflows/calibration-check.yml` tiene el `schedule` **comentado**
+    porque el secret `OPS_SERVICE_URL` no existe (prod no está desplegada) y el
+    curl fallaba a diario con `curl: (3) URL rejected: No host part in the URL`.
+    Cuando exista la infra prod: (a) agregar el secret `OPS_SERVICE_URL` en
+    Settings → Secrets and variables → Actions del repo, (b) descomentar el
+    bloque `schedule` en el workflow.

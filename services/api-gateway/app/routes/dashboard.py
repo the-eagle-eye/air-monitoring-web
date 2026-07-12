@@ -26,8 +26,12 @@ async def kpis(user: dict = Depends(get_current_user)):
     iot_equipos, ops_incidencias, ops_calibraciones = (
         await asyncio.gather(
             _fetch_json(f"{settings.IOT_SERVICE_URL}/api/v1/iot/equipos"),
-            _fetch_json(f"{settings.OPS_SERVICE_URL}/api/v1/incidencias?page_size=1000"),
-            _fetch_json(f"{settings.OPS_SERVICE_URL}/api/v1/calibraciones?page_size=1000"),
+            _fetch_json(
+                f"{settings.OPS_SERVICE_URL}/api/v1/incidencias?page_size=1000"
+            ),
+            _fetch_json(
+                f"{settings.OPS_SERVICE_URL}/api/v1/calibraciones?page_size=1000"
+            ),
         )
     )
 
@@ -50,7 +54,9 @@ async def kpis(user: dict = Depends(get_current_user)):
             if tipo in incidencias_por_tipo:
                 incidencias_por_tipo[tipo] += 1
 
-    calibraciones_data = ops_calibraciones if isinstance(ops_calibraciones, dict) else {}
+    calibraciones_data = (
+        ops_calibraciones if isinstance(ops_calibraciones, dict) else {}
+    )
     calibraciones_items = calibraciones_data.get("items", [])
     calibraciones_pendientes = sum(
         1 for c in calibraciones_items if not c.get("fecha_calibracion")

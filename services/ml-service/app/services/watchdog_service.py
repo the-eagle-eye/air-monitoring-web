@@ -106,7 +106,7 @@ def run_watchdog(db: Session, now: datetime | None = None,
         severity = _severity_for_gap(gap_min)
 
         if severity is None:
-            # dentro de tolerancia -> transmision viva; limpiar si estaba marcado (CT-04)
+            # dentro de tolerancia -> transmision viva; limpiar si marcado (CT-04)
             if state.transmission_state != TRANSMISSION_OK:
                 state.transmission_state = TRANSMISSION_OK
                 state.transmission_severity = None

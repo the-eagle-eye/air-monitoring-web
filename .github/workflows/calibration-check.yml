@@ -1,8 +1,10 @@
 name: Daily Calibration Check
 
 on:
-  schedule:
-    - cron: '0 6 * * *'  # Diario a las 6 AM UTC
+  # Cron desactivado hasta que prod esté desplegada y el secret
+  # OPS_SERVICE_URL exista en el repo. Ver BACKLOG_POST_MVP.md §Calidad.
+  # schedule:
+  #   - cron: '0 6 * * *'  # Diario a las 6 AM UTC
   workflow_dispatch: {}   # Permite trigger manual
 
 jobs:

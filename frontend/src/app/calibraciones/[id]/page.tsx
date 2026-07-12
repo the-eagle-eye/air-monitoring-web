@@ -29,7 +29,10 @@ export default function CalibracionDetailPage() {
   const [proveedorId, setProveedorId] = useState('');
   const [fechaCalibracion, setFechaCalibracion] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [saveMsg, setSaveMsg] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
 
   useEffect(() => {
     Promise.all([fetchCalibracion(id), fetchProveedores()])
@@ -39,9 +42,7 @@ export default function CalibracionDetailPage() {
         setCertificadoUrl(cal.certificado_url ?? '');
         setProveedorId(cal.proveedor_id ? String(cal.proveedor_id) : '');
         setFechaCalibracion(
-          cal.fecha_calibracion
-            ? cal.fecha_calibracion.slice(0, 10)
-            : '',
+          cal.fecha_calibracion ? cal.fecha_calibracion.slice(0, 10) : '',
         );
         setProveedores(provs);
       })
@@ -59,8 +60,16 @@ export default function CalibracionDetailPage() {
     setSaveMsg(null);
 
     // Validar campos obligatorios
-    if (!fechaCalibracion || !nota.trim() || !certificadoUrl.trim() || !proveedorId) {
-      setSaveMsg({ text: 'Todos los campos son obligatorios: Fecha, Nota, URL Certificado y Proveedor', isError: true });
+    if (
+      !fechaCalibracion ||
+      !nota.trim() ||
+      !certificadoUrl.trim() ||
+      !proveedorId
+    ) {
+      setSaveMsg({
+        text: 'Todos los campos son obligatorios: Fecha, Nota, URL Certificado y Proveedor',
+        isError: true,
+      });
       setSaving(false);
       return;
     }
@@ -76,14 +85,21 @@ export default function CalibracionDetailPage() {
       setSaveMsg({ text: 'Cambios guardados', isError: false });
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
-      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al guardar', isError: true });
+      setSaveMsg({
+        text: err instanceof Error ? err.message : 'Error al guardar',
+        isError: true,
+      });
     } finally {
       setSaving(false);
     }
   }
 
   if (loading) {
-    return <div className="mx-auto max-w-3xl px-4 py-12 text-center text-zinc-400">Cargando...</div>;
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-12 text-center text-zinc-400">
+        Cargando...
+      </div>
+    );
   }
 
   if (error || !calibracion) {
@@ -145,19 +161,25 @@ export default function CalibracionDetailPage() {
       {/* Info resumida */}
       <div className="mb-6 grid grid-cols-2 gap-4 rounded-lg border border-zinc-200 bg-white p-6 sm:grid-cols-3 dark:border-zinc-700 dark:bg-zinc-900">
         <div>
-          <dt className="text-xs font-medium uppercase text-zinc-500">Equipo</dt>
+          <dt className="text-xs font-medium text-zinc-500 uppercase">
+            Equipo
+          </dt>
           <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
             {calibracion.device_id}
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase text-zinc-500">Estado</dt>
+          <dt className="text-xs font-medium text-zinc-500 uppercase">
+            Estado
+          </dt>
           <dd className="mt-0.5">
             <StatusBadge status={calibracion.estado} />
           </dd>
         </div>
         <div>
-          <dt className="text-xs font-medium uppercase text-zinc-500">Creada</dt>
+          <dt className="text-xs font-medium text-zinc-500 uppercase">
+            Creada
+          </dt>
           <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
             {new Date(calibracion.created_at).toLocaleString()}
           </dd>
@@ -219,9 +241,13 @@ export default function CalibracionDetailPage() {
                   required
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                 >
-                  <option value="" disabled>Seleccionar proveedor</option>
+                  <option value="" disabled>
+                    Seleccionar proveedor
+                  </option>
                   {proveedores.map((p) => (
-                    <option key={p.id} value={p.id}>{p.nombre}</option>
+                    <option key={p.id} value={p.id}>
+                      {p.nombre}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -240,7 +266,9 @@ export default function CalibracionDetailPage() {
                   Cancelar
                 </Link>
                 {saveMsg && (
-                  <span className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}>
+                  <span
+                    className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}
+                  >
                     {saveMsg.text}
                   </span>
                 )}
@@ -254,21 +282,29 @@ export default function CalibracionDetailPage() {
             </h2>
             <div className="space-y-4">
               <div>
-                <dt className="text-xs font-medium uppercase text-zinc-500">Fecha Calibracion</dt>
+                <dt className="text-xs font-medium text-zinc-500 uppercase">
+                  Fecha Calibracion
+                </dt>
                 <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
                   {calibracion.fecha_calibracion
-                    ? new Date(calibracion.fecha_calibracion).toLocaleDateString()
+                    ? new Date(
+                        calibracion.fecha_calibracion,
+                      ).toLocaleDateString()
                     : 'Pendiente'}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-medium uppercase text-zinc-500">Nota</dt>
-                <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                <dt className="text-xs font-medium text-zinc-500 uppercase">
+                  Nota
+                </dt>
+                <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                   {calibracion.nota || '—'}
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-medium uppercase text-zinc-500">Certificado</dt>
+                <dt className="text-xs font-medium text-zinc-500 uppercase">
+                  Certificado
+                </dt>
                 <dd className="mt-1 text-sm">
                   {calibracion.certificado_url ? (
                     <a
@@ -285,7 +321,9 @@ export default function CalibracionDetailPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-xs font-medium uppercase text-zinc-500">Proveedor</dt>
+                <dt className="text-xs font-medium text-zinc-500 uppercase">
+                  Proveedor
+                </dt>
                 <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
                   {proveedor?.nombre ?? 'Sin proveedor'}
                 </dd>

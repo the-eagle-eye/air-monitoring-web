@@ -153,7 +153,7 @@ class TestC8OnboardingAutomatico:
     docs/runbook-onboarding-estacion.md §C8."""
 
     def test_reading_valido_desconocido_autocrea_en_cuarentena(self, client):
-        # device_id con formato válido pero no registrado -> se auto-crea 'no_confirmado'
+        # device_id con formato válido pero no registrado -> se auto-crea
         payload = {**VALID_READING_PAYLOAD, "equipo": "T500"}
         resp = client.post("/api/v1/iot/readings", json=payload)
         assert resp.status_code == 200          # la lectura se acepta
@@ -169,7 +169,8 @@ class TestC8OnboardingAutomatico:
         payload = {**VALID_READING_PAYLOAD, "equipo": "CA-PUNO-07"}
         resp = client.post("/api/v1/iot/readings", json=payload)
         assert resp.status_code == 200
-        assert client.get("/api/v1/iot/equipos/CA-PUNO-07").json()["estado"] == "no_confirmado"
+        eq = client.get("/api/v1/iot/equipos/CA-PUNO-07").json()
+        assert eq["estado"] == "no_confirmado"
 
     def test_reading_formato_invalido_se_rechaza(self, client):
         # typos / basura NO se auto-crean (protege el catálogo; endpoint público)
@@ -180,8 +181,14 @@ class TestC8OnboardingAutomatico:
             assert resp.status_code == 404, f"{bad!r} debería rechazarse"
 
     def test_equipos_pendientes_lista_solo_cuarentena(self, client):
-        client.post("/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": "T500"})
-        client.post("/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": "T501"})
+        client.post(
+            "/api/v1/iot/readings",
+            json={**VALID_READING_PAYLOAD, "equipo": "T500"},
+        )
+        client.post(
+            "/api/v1/iot/readings",
+            json={**VALID_READING_PAYLOAD, "equipo": "T501"},
+        )
         pend = client.get("/api/v1/iot/equipos/pendientes").json()
         ids = {e["device_id"] for e in pend}
         assert ids == {"T500", "T501"}          # solo las cuarentenadas
@@ -190,7 +197,10 @@ class TestC8OnboardingAutomatico:
         assert "T101" not in ids
 
     def test_confirmar_activa_y_completa_metadatos(self, client):
-        client.post("/api/v1/iot/readings", json={**VALID_READING_PAYLOAD, "equipo": "T500"})
+        client.post(
+            "/api/v1/iot/readings",
+            json={**VALID_READING_PAYLOAD, "equipo": "T500"},
+        )
         resp = client.post("/api/v1/iot/equipos/T500/confirmar", json={
             "nombre": "Analizador SO2 Puno",
             "marca": "Thermo",

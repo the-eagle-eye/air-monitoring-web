@@ -8,7 +8,7 @@ export interface DashboardData {
 // predicciones, alertas) que quedaron deprecadas al migrar del Random Forest.
 export interface KpiData {
   totalEquipos: number;
-  anomalias24h: number;      // equipos con estado anómalo (observado/riesgo/crítico)
+  anomalias24h: number; // equipos con estado anómalo (observado/riesgo/crítico)
   incidenciasAbiertas: number;
   sinTransmision: number;
 }

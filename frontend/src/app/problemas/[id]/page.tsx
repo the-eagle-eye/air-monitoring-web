@@ -13,7 +13,10 @@ import StatusBadge from '@/components/ui/StatusBadge';
 import Badge from '@/components/ui/Badge';
 import type { Problema, Incidencia } from '@/types/ops';
 
-const ESTADO_VARIANT: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'default'> = {
+const ESTADO_VARIANT: Record<
+  string,
+  'success' | 'warning' | 'danger' | 'info' | 'default'
+> = {
   abierto: 'danger',
   investigacion: 'warning',
   resuelto: 'success',
@@ -71,7 +74,9 @@ export default function ProblemaDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   function startEdit() {
     if (!problema) return;
@@ -114,7 +119,9 @@ export default function ProblemaDetailPage() {
       header: 'Prioridad',
       render: (item: Incidencia) => (
         <Badge
-          label={item.prioridad.charAt(0).toUpperCase() + item.prioridad.slice(1)}
+          label={
+            item.prioridad.charAt(0).toUpperCase() + item.prioridad.slice(1)
+          }
           variant={PRIORIDAD_VARIANT[item.prioridad] ?? 'default'}
         />
       ),
@@ -147,7 +154,9 @@ export default function ProblemaDetailPage() {
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : error ? (
-        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       ) : problema ? (
         <>
           <div className="mb-6 flex items-start justify-between gap-4">
@@ -224,7 +233,9 @@ export default function ProblemaDetailPage() {
               </div>
 
               {saveError && (
-                <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">{saveError}</div>
+                <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
+                  {saveError}
+                </div>
               )}
 
               <div className="flex gap-3">
@@ -247,18 +258,18 @@ export default function ProblemaDetailPage() {
           ) : (
             <div className="mb-8 space-y-6 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
               <div>
-                <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                <h3 className="mb-1 text-xs font-medium tracking-wider text-zinc-500 uppercase">
                   Descripcion
                 </h3>
-                <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                <p className="text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                   {problema.descripcion || '—'}
                 </p>
               </div>
               <div>
-                <h3 className="mb-1 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                <h3 className="mb-1 text-xs font-medium tracking-wider text-zinc-500 uppercase">
                   Causa raiz
                 </h3>
-                <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+                <p className="text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                   {problema.causa_raiz || '—'}
                 </p>
               </div>

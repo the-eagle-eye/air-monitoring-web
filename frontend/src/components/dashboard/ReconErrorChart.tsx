@@ -44,7 +44,10 @@ const Chart = dynamic(
       } = mod;
 
       // M3: tooltip con el desglose de los 2 detectores para la lectura.
-      function DetectorTooltip({ active, payload }: {
+      function DetectorTooltip({
+        active,
+        payload,
+      }: {
         active?: boolean;
         payload?: { payload: ChartPoint }[];
       }) {
@@ -55,24 +58,39 @@ const Chart = dynamic(
         const aeAnom =
           p.recon_error != null && th != null ? p.recon_error > th : null;
         const cfg = HEALTH_STATE_CONFIG[p.health_state];
-        const row = (label: string, verdict: boolean | null, detail?: string) => (
+        const row = (
+          label: string,
+          verdict: boolean | null,
+          detail?: string,
+        ) => (
           <div className="flex items-center justify-between gap-4">
             <span className="text-zinc-400">{label}</span>
-            <span className={
-              verdict == null ? 'text-zinc-500'
-                : verdict ? 'font-medium text-red-400' : 'font-medium text-green-400'
-            }>
+            <span
+              className={
+                verdict == null
+                  ? 'text-zinc-500'
+                  : verdict
+                    ? 'font-medium text-red-400'
+                    : 'font-medium text-green-400'
+              }
+            >
               {verdict == null ? '—' : verdict ? 'Anomalía' : 'Normal'}
               {detail ? ` ${detail}` : ''}
             </span>
           </div>
         );
         return (
-          <div style={{
-            backgroundColor: '#18181b', border: '1px solid #3f3f46',
-            borderRadius: 8, color: '#fafafa', fontSize: 12, padding: '10px 12px',
-            minWidth: 220,
-          }}>
+          <div
+            style={{
+              backgroundColor: '#18181b',
+              border: '1px solid #3f3f46',
+              borderRadius: 8,
+              color: '#fafafa',
+              fontSize: 12,
+              padding: '10px 12px',
+              minWidth: 220,
+            }}
+          >
             <div className="mb-2 font-medium">{p.timestamp}</div>
             {row(
               'Autoencoder',
@@ -99,7 +117,11 @@ const Chart = dynamic(
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#a1a1aa40" />
-              <XAxis dataKey="timestamp" tick={{ fontSize: 11 }} stroke="#a1a1aa" />
+              <XAxis
+                dataKey="timestamp"
+                tick={{ fontSize: 11 }}
+                stroke="#a1a1aa"
+              />
               <YAxis tick={{ fontSize: 11 }} stroke="#a1a1aa" />
               <Tooltip content={<DetectorTooltip />} />
               <Legend />
@@ -137,7 +159,10 @@ interface ReconErrorChartProps {
 
 // Gráfico de tendencia del error de reconstrucción del ensemble con la línea θ
 // (poc-dashboard §3.2). Visible a todos los roles (decisión §7.2).
-export default function ReconErrorChart({ points, loading }: ReconErrorChartProps) {
+export default function ReconErrorChart({
+  points,
+  loading,
+}: ReconErrorChartProps) {
   const theta = points.find((p) => p.theta != null)?.theta ?? null;
   const data: ChartPoint[] = points.map((p) => ({
     timestamp: formatTimestamp(p.timestamp),

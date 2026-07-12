@@ -23,7 +23,7 @@ export default function DataTable<T>({
             {columns.map((col) => (
               <th
                 key={col.key}
-                className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+                className="px-4 py-3 text-left text-xs font-medium tracking-wider text-zinc-500 uppercase dark:text-zinc-400"
               >
                 {col.header}
               </th>
@@ -39,7 +39,7 @@ export default function DataTable<T>({
               {columns.map((col) => (
                 <td
                   key={col.key}
-                  className="whitespace-nowrap px-4 py-3 text-sm text-zinc-700 dark:text-zinc-300"
+                  className="px-4 py-3 text-sm whitespace-nowrap text-zinc-700 dark:text-zinc-300"
                 >
                   {col.render
                     ? col.render(item)

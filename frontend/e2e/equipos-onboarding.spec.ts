@@ -6,24 +6,50 @@ import { IOT } from './helpers/constants';
 // panel "Equipos por confirmar" en /equipos, y el coordinador/admin los confirma.
 
 const MOCK_EQUIPOS = [
-  { device_id: 'T101', nombre: 'Analizador SO2', tipo: 'SO2', ubicacion: 'Sala A', estado: 'activo' },
+  {
+    device_id: 'T101',
+    nombre: 'Analizador SO2',
+    tipo: 'SO2',
+    ubicacion: 'Sala A',
+    estado: 'activo',
+  },
 ];
 
 const MOCK_PENDIENTES = [
-  { device_id: 'T500', estado: 'no_confirmado', criticidad: 'media',
-    fecha_registro: new Date().toISOString() },
+  {
+    device_id: 'T500',
+    estado: 'no_confirmado',
+    criticidad: 'media',
+    fecha_registro: new Date().toISOString(),
+  },
 ];
 
 async function setupMocks(page: Page, pendientes = MOCK_PENDIENTES) {
   await page.route(`${IOT}/api/v1/iot/equipos`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_EQUIPOS) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_EQUIPOS),
+    }),
   );
   await page.route(`${IOT}/api/v1/iot/equipos/pendientes`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(pendientes) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(pendientes),
+    }),
   );
   await page.route(`${IOT}/api/v1/iot/equipos/T500/confirmar`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json',
-      body: JSON.stringify({ device_id: 'T500', estado: 'activo', criticidad: 'alta', fecha_registro: new Date().toISOString() }) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        device_id: 'T500',
+        estado: 'activo',
+        criticidad: 'alta',
+        fecha_registro: new Date().toISOString(),
+      }),
+    }),
   );
 }
 
@@ -33,9 +59,13 @@ test.describe('Equipos onboarding (C8)', () => {
     await setupMocks(page);
     await page.goto('/equipos', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText(/Equipos por confirmar/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Equipos por confirmar/i)).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByText('T500')).toBeVisible();
-    await expect(page.getByRole('button', { name: /Confirmar/i })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: /Confirmar/i }),
+    ).toBeVisible();
   });
 
   test('confirmar un equipo lo quita del panel', async ({ page }) => {
@@ -53,7 +83,9 @@ test.describe('Equipos onboarding (C8)', () => {
     await setupMocks(page, []);
     await page.goto('/equipos', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText(/Equipos$/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/Equipos$/i).first()).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByText(/Equipos por confirmar/i)).toHaveCount(0);
   });
 });

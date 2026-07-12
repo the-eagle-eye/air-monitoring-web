@@ -2,11 +2,7 @@
 // Contrato del ml-service (SPEC §6.2).
 
 export type HealthState =
-  | 'SANO'
-  | 'OBSERVADO'
-  | 'EN_RIESGO'
-  | 'CRITICO'
-  | 'SIN_DATOS';
+  'SANO' | 'OBSERVADO' | 'EN_RIESGO' | 'CRITICO' | 'SIN_DATOS';
 
 export interface HealthEvaluateResponse {
   device_id: string;
@@ -57,8 +53,23 @@ export const HEALTH_STATE_CONFIG: Record<
   { label: string; color: string; emoji: string; isAlert: boolean }
 > = {
   SANO: { label: 'Sano', color: '#22c55e', emoji: '🟢', isAlert: false },
-  OBSERVADO: { label: 'Observado', color: '#eab308', emoji: '🟡', isAlert: true },
-  EN_RIESGO: { label: 'En riesgo', color: '#f97316', emoji: '🟠', isAlert: true },
+  OBSERVADO: {
+    label: 'Observado',
+    color: '#eab308',
+    emoji: '🟡',
+    isAlert: true,
+  },
+  EN_RIESGO: {
+    label: 'En riesgo',
+    color: '#f97316',
+    emoji: '🟠',
+    isAlert: true,
+  },
   CRITICO: { label: 'Crítico', color: '#ef4444', emoji: '🔴', isAlert: true },
-  SIN_DATOS: { label: 'Sin datos', color: '#71717a', emoji: '⚫', isAlert: false },
+  SIN_DATOS: {
+    label: 'Sin datos',
+    color: '#71717a',
+    emoji: '⚫',
+    isAlert: false,
+  },
 };

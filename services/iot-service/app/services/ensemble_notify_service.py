@@ -24,6 +24,7 @@ def _notify_enabled() -> bool:
     # Se lee dinámicamente para que tests/entornos puedan alternarlo sin re-import.
     return os.environ.get("ENSEMBLE_NOTIFY_ENABLED", "1") == "1"
 
+
 # Mapeo feature del ensemble -> posibles claves en el payload de sensores.
 # El payload real (Thermo) usa mixed-case; toleramos variantes por robustez.
 FEATURE_KEYS: dict[str, tuple[str, ...]] = {

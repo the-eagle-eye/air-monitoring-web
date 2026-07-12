@@ -16,7 +16,8 @@ export default function EquiposPage() {
 
   const canEdit = user?.rol === 'administrador';
   // C8: confirmar equipos en cuarentena = coordinador/admin
-  const canConfirm = user?.rol === 'coordinador' || user?.rol === 'administrador';
+  const canConfirm =
+    user?.rol === 'coordinador' || user?.rol === 'administrador';
 
   const loadEquipos = useCallback(() => {
     fetchEquipos()
@@ -25,7 +26,9 @@ export default function EquiposPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { loadEquipos(); }, [loadEquipos]);
+  useEffect(() => {
+    loadEquipos();
+  }, [loadEquipos]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">

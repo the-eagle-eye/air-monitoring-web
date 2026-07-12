@@ -43,7 +43,9 @@ export default function RepuestosPage() {
       .finally(() => setLoading(false));
   }, [filterCategoria]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   function openCreate() {
     setEditingId(null);
@@ -65,7 +67,10 @@ export default function RepuestosPage() {
     setError(null);
     try {
       if (editingId) {
-        await updateRepuesto(editingId, { nombre: formNombre, categoria: formCategoria });
+        await updateRepuesto(editingId, {
+          nombre: formNombre,
+          categoria: formCategoria,
+        });
       } else {
         await createRepuesto({ nombre: formNombre, categoria: formCategoria });
       }
@@ -100,7 +105,8 @@ export default function RepuestosPage() {
     {
       key: 'created_at',
       header: 'Creado',
-      render: (item: Repuesto) => new Date(item.created_at).toLocaleDateString(),
+      render: (item: Repuesto) =>
+        new Date(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -131,7 +137,7 @@ export default function RepuestosPage() {
           Repuestos
         </h1>
         <button
-          onClick={() => showForm ? setShowForm(false) : openCreate()}
+          onClick={() => (showForm ? setShowForm(false) : openCreate())}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {showForm ? 'Cancelar' : 'Nuevo Repuesto'}
@@ -143,7 +149,10 @@ export default function RepuestosPage() {
           <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
             {editingId ? 'Editar Repuesto' : 'Nuevo Repuesto'}
           </h2>
-          <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-4">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-wrap items-end gap-4"
+          >
             <div className="flex-1">
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Nombre
@@ -167,7 +176,9 @@ export default function RepuestosPage() {
                 className="rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               >
                 {CATEGORIAS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </div>
@@ -190,20 +201,30 @@ export default function RepuestosPage() {
         >
           <option value="">Todas las categorias</option>
           {CATEGORIAS.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>
+              {c}
+            </option>
           ))}
         </select>
-        <span className="text-sm text-zinc-500">{repuestos.length} resultados</span>
+        <span className="text-sm text-zinc-500">
+          {repuestos.length} resultados
+        </span>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <DataTable columns={columns} data={repuestos} keyExtractor={(r) => r.id} />
+        <DataTable
+          columns={columns}
+          data={repuestos}
+          keyExtractor={(r) => r.id}
+        />
       )}
     </div>
   );

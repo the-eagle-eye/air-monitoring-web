@@ -104,7 +104,9 @@ def send_calibracion_notification(
         )
         return True
     except Exception:
-        logger.exception("Error enviando email de calibracion para equipo %s", device_id)
+        logger.exception(
+            "Error enviando email de calibracion para equipo %s", device_id
+        )
         return False
 
 
@@ -184,5 +186,7 @@ def send_alerta_correctiva_notification(
         )
         return True
     except Exception:
-        logger.exception("Error enviando email de alerta correctiva para equipo %s", device_id)
+        logger.exception(
+            "Error enviando email de alerta correctiva para equipo %s", device_id
+        )
         return False

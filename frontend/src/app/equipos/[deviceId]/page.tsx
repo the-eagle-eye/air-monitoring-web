@@ -58,19 +58,49 @@ const CRITICIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
 const MiniSensorChart = dynamic(
   () =>
     import('recharts').then((mod) => {
-      const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } = mod;
+      const {
+        LineChart,
+        Line,
+        XAxis,
+        YAxis,
+        CartesianGrid,
+        Tooltip,
+        Legend,
+        ResponsiveContainer,
+      } = mod;
 
       function Chart({ data }: { data: Record<string, unknown>[] }) {
         return (
           <ResponsiveContainer width="100%" height={250}>
             <LineChart data={data}>
               <CartesianGrid strokeDasharray="3 3" stroke="#a1a1aa40" />
-              <XAxis dataKey="timestamp" tick={{ fontSize: 10 }} stroke="#a1a1aa" />
+              <XAxis
+                dataKey="timestamp"
+                tick={{ fontSize: 10 }}
+                stroke="#a1a1aa"
+              />
               <YAxis tick={{ fontSize: 10 }} stroke="#a1a1aa" />
-              <Tooltip contentStyle={{ backgroundColor: '#18181b', border: '1px solid #3f3f46', borderRadius: '8px', color: '#fafafa', fontSize: 12 }} />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#18181b',
+                  border: '1px solid #3f3f46',
+                  borderRadius: '8px',
+                  color: '#fafafa',
+                  fontSize: 12,
+                }}
+              />
               <Legend />
               {SENSOR_LINES.map((sensor) => (
-                <Line key={sensor.key} type="monotone" dataKey={sensor.key} name={sensor.name} stroke={sensor.color} strokeWidth={2} dot={false} connectNulls />
+                <Line
+                  key={sensor.key}
+                  type="monotone"
+                  dataKey={sensor.key}
+                  name={sensor.name}
+                  stroke={sensor.color}
+                  strokeWidth={2}
+                  dot={false}
+                  connectNulls
+                />
               ))}
             </LineChart>
           </ResponsiveContainer>
@@ -96,7 +126,10 @@ function EquipoDetail({ equipo }: { equipo: Equipo }) {
     { label: 'Rango', value: equipo.rango_medicion },
     { label: 'Estado', value: equipo.estado },
     { label: 'Fecha Ingreso', value: equipo.fecha_ingreso },
-    { label: 'Fecha Registro', value: new Date(equipo.fecha_registro).toLocaleDateString() },
+    {
+      label: 'Fecha Registro',
+      value: new Date(equipo.fecha_registro).toLocaleDateString(),
+    },
   ];
 
   const criticidad = equipo.criticidad ?? 'media';
@@ -105,7 +138,7 @@ function EquipoDetail({ equipo }: { equipo: Equipo }) {
     <div className="grid grid-cols-2 gap-x-8 gap-y-3 sm:grid-cols-3">
       {fields.map((f) => (
         <div key={f.label}>
-          <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+          <dt className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
             {f.label}
           </dt>
           <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
@@ -114,7 +147,7 @@ function EquipoDetail({ equipo }: { equipo: Equipo }) {
         </div>
       ))}
       <div>
-        <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+        <dt className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
           Criticidad
         </dt>
         <dd className="mt-0.5">
@@ -157,32 +190,49 @@ export default function EquipoDetailPage() {
   const [healthPoints, setHealthPoints] = useState<HealthReadingPoint[]>([]);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
-  const loadAllData = useCallback((silent = false) => {
-    if (!silent) setLoading(true);
-    // Salud predictiva (ensemble) — independiente, tolerante a 404/sin datos.
-    fetchHealthReadings(deviceId, 300)
-      .then((res) => setHealthPoints(res.points))
-      .catch(() => setHealthPoints([]));
-    Promise.all([
-      fetchEquipo(deviceId),
-      fetchIncidencias({ device_id: deviceId, tipo: 'correctiva', page_size: 100 }),
-      fetchIncidencias({ device_id: deviceId, tipo: 'calibracion', page_size: 100 }),
-      fetchLecturas(deviceId, 1, 100),
-      fetchCalibracionesOps({ device_id: deviceId, page_size: 100 }),
-    ])
-      .then(([eq, corr, cal, lects, calOps]) => {
-        setEquipo(eq);
-        setCorrectivos(corr.items);
-        setIncCalibraciones(cal.items);
-        setLecturas(lects.items);
-        setCalibraciones(calOps.items);
-        setLastUpdated(new Date());
-      })
-      .catch((err) => { if (!silent) setError(err.message); })
-      .finally(() => { if (!silent) setLoading(false); });
-  }, [deviceId]);
+  const loadAllData = useCallback(
+    (silent = false) => {
+      if (!silent) setLoading(true);
+      // Salud predictiva (ensemble) — independiente, tolerante a 404/sin datos.
+      fetchHealthReadings(deviceId, 300)
+        .then((res) => setHealthPoints(res.points))
+        .catch(() => setHealthPoints([]));
+      Promise.all([
+        fetchEquipo(deviceId),
+        fetchIncidencias({
+          device_id: deviceId,
+          tipo: 'correctiva',
+          page_size: 100,
+        }),
+        fetchIncidencias({
+          device_id: deviceId,
+          tipo: 'calibracion',
+          page_size: 100,
+        }),
+        fetchLecturas(deviceId, 1, 100),
+        fetchCalibracionesOps({ device_id: deviceId, page_size: 100 }),
+      ])
+        .then(([eq, corr, cal, lects, calOps]) => {
+          setEquipo(eq);
+          setCorrectivos(corr.items);
+          setIncCalibraciones(cal.items);
+          setLecturas(lects.items);
+          setCalibraciones(calOps.items);
+          setLastUpdated(new Date());
+        })
+        .catch((err) => {
+          if (!silent) setError(err.message);
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [deviceId],
+  );
 
-  useEffect(() => { loadAllData(); }, [loadAllData]);
+  useEffect(() => {
+    loadAllData();
+  }, [loadAllData]);
 
   usePolling(() => loadAllData(true), 30_000);
 
@@ -211,8 +261,11 @@ export default function EquipoDetailPage() {
     );
   }
 
-  const latestHealth = healthPoints.length > 0 ? healthPoints[healthPoints.length - 1] : null;
-  const healthConfig = latestHealth ? HEALTH_STATE_CONFIG[latestHealth.health_state] : null;
+  const latestHealth =
+    healthPoints.length > 0 ? healthPoints[healthPoints.length - 1] : null;
+  const healthConfig = latestHealth
+    ? HEALTH_STATE_CONFIG[latestHealth.health_state]
+    : null;
   const anomalousReadings = healthPoints.filter((p) => p.and_alert).length;
 
   const sensorChartData = lecturas.map((l) => ({
@@ -238,7 +291,9 @@ export default function EquipoDetailPage() {
       header: 'Prioridad',
       render: (item: Incidencia) => (
         <Badge
-          label={item.prioridad.charAt(0).toUpperCase() + item.prioridad.slice(1)}
+          label={
+            item.prioridad.charAt(0).toUpperCase() + item.prioridad.slice(1)
+          }
           variant={PRIORIDAD_VARIANT[item.prioridad] ?? 'default'}
         />
       ),
@@ -256,7 +311,8 @@ export default function EquipoDetailPage() {
     {
       key: 'created_at',
       header: 'Fecha',
-      render: (item: Incidencia) => parseUTC(item.created_at).toLocaleDateString(),
+      render: (item: Incidencia) =>
+        parseUTC(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -280,30 +336,37 @@ export default function EquipoDetailPage() {
       key: 'fecha_calibracion',
       header: 'Fecha Calibracion',
       render: (item: CalibracionOps) =>
-        item.fecha_calibracion
-          ? new Date(item.fecha_calibracion).toLocaleDateString()
-          : <span className="text-amber-500">Pendiente</span>,
+        item.fecha_calibracion ? (
+          new Date(item.fecha_calibracion).toLocaleDateString()
+        ) : (
+          <span className="text-amber-500">Pendiente</span>
+        ),
     },
     {
       key: 'nota',
       header: 'Nota',
       render: (item: CalibracionOps) =>
         item.nota
-          ? item.nota.length > 50 ? item.nota.slice(0, 50) + '...' : item.nota
+          ? item.nota.length > 50
+            ? item.nota.slice(0, 50) + '...'
+            : item.nota
           : '—',
     },
     {
       key: 'certificado_url',
       header: 'Certificado',
       render: (item: CalibracionOps) =>
-        item.certificado_url
-          ? <span className="text-green-500">Si</span>
-          : <span className="text-zinc-400">No</span>,
+        item.certificado_url ? (
+          <span className="text-green-500">Si</span>
+        ) : (
+          <span className="text-zinc-400">No</span>
+        ),
     },
     {
       key: 'created_at',
       header: 'Creada',
-      render: (item: CalibracionOps) => parseUTC(item.created_at).toLocaleDateString(),
+      render: (item: CalibracionOps) =>
+        parseUTC(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -393,25 +456,40 @@ export default function EquipoDetailPage() {
               Salud Predictiva
             </h2>
             {!latestHealth || !healthConfig ? (
-              <p className="text-sm text-zinc-400">Sin datos de salud disponibles</p>
+              <p className="text-sm text-zinc-400">
+                Sin datos de salud disponibles
+              </p>
             ) : (
               <div className="grid grid-cols-3 gap-4">
                 <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                  <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Estado</dt>
+                  <dt className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                    Estado
+                  </dt>
                   <dd className="mt-2">
                     <HealthStateBadge state={latestHealth.health_state} />
                   </dd>
                 </div>
                 <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                  <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Error recon.</dt>
-                  <dd className="mt-1 text-2xl font-bold" style={{ color: healthConfig.color }}>
-                    {latestHealth.recon_error != null ? latestHealth.recon_error.toFixed(3) : 'n/a'}
+                  <dt className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                    Error recon.
+                  </dt>
+                  <dd
+                    className="mt-1 text-2xl font-bold"
+                    style={{ color: healthConfig.color }}
+                  >
+                    {latestHealth.recon_error != null
+                      ? latestHealth.recon_error.toFixed(3)
+                      : 'n/a'}
                   </dd>
                 </div>
                 <div className="rounded-lg bg-zinc-50 p-3 dark:bg-zinc-800">
-                  <dt className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Umbral θ</dt>
+                  <dt className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                    Umbral θ
+                  </dt>
                   <dd className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                    {latestHealth.theta != null ? latestHealth.theta.toFixed(3) : 'n/a'}
+                    {latestHealth.theta != null
+                      ? latestHealth.theta.toFixed(3)
+                      : 'n/a'}
                   </dd>
                 </div>
               </div>
@@ -421,20 +499,36 @@ export default function EquipoDetailPage() {
           {/* Quick stats */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Lecturas</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{lecturas.length}</p>
+              <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                Lecturas
+              </p>
+              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
+                {lecturas.length}
+              </p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Lecturas anómalas</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{anomalousReadings}</p>
+              <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                Lecturas anómalas
+              </p>
+              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
+                {anomalousReadings}
+              </p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Correctivos</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{correctivos.length}</p>
+              <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                Correctivos
+              </p>
+              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
+                {correctivos.length}
+              </p>
             </div>
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-              <p className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">Calibraciones</p>
-              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">{calibraciones.length}</p>
+              <p className="text-xs font-medium text-zinc-500 uppercase dark:text-zinc-400">
+                Calibraciones
+              </p>
+              <p className="mt-1 text-2xl font-bold text-zinc-900 dark:text-white">
+                {calibraciones.length}
+              </p>
             </div>
           </div>
         </div>
@@ -480,13 +574,46 @@ export default function EquipoDetailPage() {
                 <div className="max-h-[400px] overflow-y-auto">
                   <DataTable
                     columns={[
-                      { key: 'timestamp', header: 'Timestamp', render: (l: LecturaIoT) => formatTs(l.timestamp_lectura) },
-                      { key: 'so2_ppb', header: 'SO2', render: (l: LecturaIoT) => l.so2_ppb?.toFixed(1) ?? '—' },
-                      { key: 'h2s_ppb', header: 'H2S', render: (l: LecturaIoT) => l.h2s_ppb?.toFixed(1) ?? '—' },
-                      { key: 'reaction_temp', header: 'T.Reac', render: (l: LecturaIoT) => l.reaction_temp?.toFixed(1) ?? '—' },
-                      { key: 'box_temp', header: 'T.Caja', render: (l: LecturaIoT) => l.box_temp?.toFixed(1) ?? '—' },
-                      { key: 'sample_flow', header: 'Flujo', render: (l: LecturaIoT) => l.sample_flow?.toFixed(1) ?? '—' },
-                      { key: 'uv_lamp', header: 'UV', render: (l: LecturaIoT) => l.uv_lamp_intensity?.toFixed(0) ?? '—' },
+                      {
+                        key: 'timestamp',
+                        header: 'Timestamp',
+                        render: (l: LecturaIoT) =>
+                          formatTs(l.timestamp_lectura),
+                      },
+                      {
+                        key: 'so2_ppb',
+                        header: 'SO2',
+                        render: (l: LecturaIoT) => l.so2_ppb?.toFixed(1) ?? '—',
+                      },
+                      {
+                        key: 'h2s_ppb',
+                        header: 'H2S',
+                        render: (l: LecturaIoT) => l.h2s_ppb?.toFixed(1) ?? '—',
+                      },
+                      {
+                        key: 'reaction_temp',
+                        header: 'T.Reac',
+                        render: (l: LecturaIoT) =>
+                          l.reaction_temp?.toFixed(1) ?? '—',
+                      },
+                      {
+                        key: 'box_temp',
+                        header: 'T.Caja',
+                        render: (l: LecturaIoT) =>
+                          l.box_temp?.toFixed(1) ?? '—',
+                      },
+                      {
+                        key: 'sample_flow',
+                        header: 'Flujo',
+                        render: (l: LecturaIoT) =>
+                          l.sample_flow?.toFixed(1) ?? '—',
+                      },
+                      {
+                        key: 'uv_lamp',
+                        header: 'UV',
+                        render: (l: LecturaIoT) =>
+                          l.uv_lamp_intensity?.toFixed(0) ?? '—',
+                      },
                     ]}
                     data={lecturas.slice(0, 20)}
                     keyExtractor={(l) => l.id}
@@ -509,7 +636,11 @@ export default function EquipoDetailPage() {
             {correctivos.length === 0 ? (
               <p className="text-sm text-zinc-400">No hay registros</p>
             ) : (
-              <DataTable columns={incidenciaColumns} data={correctivos} keyExtractor={(i) => i.id} />
+              <DataTable
+                columns={incidenciaColumns}
+                data={correctivos}
+                keyExtractor={(i) => i.id}
+              />
             )}
           </div>
 
@@ -521,7 +652,11 @@ export default function EquipoDetailPage() {
             {calibraciones.length === 0 ? (
               <p className="text-sm text-zinc-400">No hay registros</p>
             ) : (
-              <DataTable columns={calibracionColumns} data={calibraciones} keyExtractor={(c) => c.id} />
+              <DataTable
+                columns={calibracionColumns}
+                data={calibraciones}
+                keyExtractor={(c) => c.id}
+              />
             )}
           </div>
 
@@ -533,7 +668,11 @@ export default function EquipoDetailPage() {
             {incCalibraciones.length === 0 ? (
               <p className="text-sm text-zinc-400">No hay registros</p>
             ) : (
-              <DataTable columns={incidenciaColumns} data={incCalibraciones} keyExtractor={(i) => i.id} />
+              <DataTable
+                columns={incidenciaColumns}
+                data={incCalibraciones}
+                keyExtractor={(i) => i.id}
+              />
             )}
           </div>
         </div>

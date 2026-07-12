@@ -42,7 +42,9 @@ export default function UsuariosPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   function openCreate() {
     setEditingId(null);
@@ -158,7 +160,7 @@ export default function UsuariosPage() {
           Usuarios
         </h1>
         <button
-          onClick={() => showForm ? setShowForm(false) : openCreate()}
+          onClick={() => (showForm ? setShowForm(false) : openCreate())}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
         >
           {showForm ? 'Cancelar' : 'Nuevo Usuario'}
@@ -170,7 +172,10 @@ export default function UsuariosPage() {
           <h2 className="mb-4 text-lg font-semibold text-zinc-900 dark:text-white">
             {editingId ? 'Editar Usuario' : 'Nuevo Usuario'}
           </h2>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <form
+            onSubmit={handleSubmit}
+            className="grid grid-cols-1 gap-4 sm:grid-cols-2"
+          >
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Email
@@ -195,7 +200,9 @@ export default function UsuariosPage() {
                 className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               >
                 {ROLES.map((r) => (
-                  <option key={r} value={r}>{ROL_LABEL[r]}</option>
+                  <option key={r} value={r}>
+                    {ROL_LABEL[r]}
+                  </option>
                 ))}
               </select>
             </div>
@@ -225,7 +232,9 @@ export default function UsuariosPage() {
             </div>
             <div className="sm:col-span-2">
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {editingId ? 'Nueva Contrasena (dejar vacio para no cambiar)' : 'Contrasena'}
+                {editingId
+                  ? 'Nueva Contrasena (dejar vacio para no cambiar)'
+                  : 'Contrasena'}
               </label>
               <input
                 type="password"
@@ -257,17 +266,25 @@ export default function UsuariosPage() {
       )}
 
       <div className="mb-4">
-        <span className="text-sm text-zinc-500">{usuarios.length} usuarios</span>
+        <span className="text-sm text-zinc-500">
+          {usuarios.length} usuarios
+        </span>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <DataTable columns={columns} data={usuarios} keyExtractor={(u) => u.id} />
+        <DataTable
+          columns={columns}
+          data={usuarios}
+          keyExtractor={(u) => u.id}
+        />
       )}
     </div>
   );

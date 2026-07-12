@@ -136,7 +136,7 @@ def test_escala_recon_gigante_if_normal_queda_sano(db_session, bundle_factory):
 
 def test_escala_recon_gigante_if_anomalo_es_critico(db_session, bundle_factory):
     # si el IF SÍ marca anomalía, el recon gigante -> CRITICO (>3θ)
-    theta = bundle_factory("DEV1", recon_error=1.28e9, if_anomaly=True, theta=0.39)
+    bundle_factory("DEV1", recon_error=1.28e9, if_anomaly=True, theta=0.39)
     # subir a CRITICO es inmediato (anti-parpadeo §5.1), no requiere N_CONSEC
     out = hs.evaluate(db_session, _req("DEV1"))
     assert out["and_alert"] is True
@@ -210,9 +210,15 @@ def test_hours_since_prev_crece_sobre_timestamps(db_session, bundle_factory):
     t0 = datetime(2025, 7, 1, 0, 0, tzinfo=timezone.utc)
     hs.evaluate(db_session, _req("DEV1", valido=0, ts=t0,
                                  ppb=None, flow=None, temp=None, lamp=None))
-    hs.evaluate(db_session, _req("DEV1", valido=1, ts=t0 + timedelta(minutes=5)))  # reset
+    # reset
+    hs.evaluate(
+        db_session, _req("DEV1", valido=1, ts=t0 + timedelta(minutes=5))
+    )
     # 2 horas después
-    out = hs.evaluate(db_session, _req("DEV1", valido=1, ts=t0 + timedelta(hours=2, minutes=5)))
+    out = hs.evaluate(
+        db_session,
+        _req("DEV1", valido=1, ts=t0 + timedelta(hours=2, minutes=5)),
+    )
     assert out["hours_since_prev"] == pytest.approx(2.0, abs=0.01)
 
 
@@ -379,8 +385,9 @@ def test_disparo_no_rompe_si_ops_cae(db_session, bundle_factory, monkeypatch):
 # (recon_error, θ, veredicto IF, resultado AND, severidad). El veredicto del AE
 # se deriva en el cliente como (recon_error > theta).
 # --------------------------------------------------------------------------
-def test_m3_readings_expone_desglose_detectores(db_session, bundle_factory,
-                                                 client, capture_post):
+def test_m3_readings_expone_desglose_detectores(
+    db_session, bundle_factory, client, capture_post
+):
     # una lectura CRITICO: AE error alto, IF anómalo -> AND alerta
     bundle_factory("DEVM3", recon_error=0.10, if_anomaly=True, theta=0.02)
     hs.evaluate(db_session, _req("DEVM3"))

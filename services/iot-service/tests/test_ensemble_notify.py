@@ -135,7 +135,7 @@ _OEFA_BASE = {"so2_ppb": 2.5, "so2_flow": 0.45,
     ("so2_ppb", -50.0),          # < -5
     ("so2_flow", 600.0),         # > 10 (Thermo)
     ("so2_flow", 0.0),           # < 0.05
-    ("so2_internal_temp", 80.0), # > 60
+    ("so2_internal_temp", 80.0),  # > 60
     ("so2_lamp_int", 1940.0),    # > 300 (Thermo)
     ("so2_lamp_int", 10.0),      # < 30
 ])
@@ -168,6 +168,7 @@ class _CapturePost:
 
         class _Resp:
             status_code = 200
+
             def raise_for_status(self_inner):
                 return None
         return _Resp()

@@ -52,7 +52,10 @@ export default function EquipoGrid({
       </h2>
       <div className="flex items-stretch gap-4 overflow-x-auto pb-2">
         {sorted.map((equipo) => (
-          <div key={equipo.device_id} className="min-w-[280px] flex-shrink-0 self-stretch">
+          <div
+            key={equipo.device_id}
+            className="min-w-[280px] flex-shrink-0 self-stretch"
+          >
             <EquipoCard
               equipo={equipo}
               health={healthStates[equipo.device_id] ?? null}

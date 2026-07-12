@@ -10,7 +10,10 @@ interface EquiposTableProps {
   readOnly?: boolean;
 }
 
-export default function EquiposTable({ equipos, readOnly = false }: EquiposTableProps) {
+export default function EquiposTable({
+  equipos,
+  readOnly = false,
+}: EquiposTableProps) {
   const columns = [
     {
       key: 'nombre',

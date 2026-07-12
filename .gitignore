@@ -108,3 +108,4 @@ crash.*.log
 secrets.local*
 # Bundle de código subido a S3 para el deploy (repo privado)
 airmon-app-bundle.tar.gz
+docs/*

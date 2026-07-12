@@ -34,7 +34,9 @@ class TestEmailService:
             patch.object(email_service.settings, "SMTP_USER", "user"),
             patch.object(email_service.settings, "SMTP_PASSWORD", "pass"),
             patch.object(email_service.settings, "SMTP_FROM", "test@test.com"),
-            patch.object(email_service.settings, "FRONTEND_URL", "http://localhost:3000"),
+            patch.object(
+                email_service.settings, "FRONTEND_URL", "http://localhost:3000"
+            ),
         ):
             result = email_service.send_calibracion_notification(
                 db_session,
@@ -101,7 +103,9 @@ class TestEmailService:
             patch.object(email_service.settings, "SMTP_USER", "user"),
             patch.object(email_service.settings, "SMTP_PASSWORD", "pass"),
             patch.object(email_service.settings, "SMTP_FROM", "test@test.com"),
-            patch.object(email_service.settings, "FRONTEND_URL", "http://localhost:3000"),
+            patch.object(
+                email_service.settings, "FRONTEND_URL", "http://localhost:3000"
+            ),
         ):
             result = email_service.send_alerta_correctiva_notification(
                 db_session,

@@ -7,9 +7,6 @@ from sqlalchemy.orm import Session, joinedload
 from app.models.incidencia import Incidencia
 from app.models.mantenimiento import MantenimientoCorrectivo, MantenimientoRepuesto
 from app.models.calibracion import Calibracion
-from app.models.usuario import Usuario
-from app.models.proveedor_calibracion import ProveedorCalibracion
-from app.models.repuesto import Repuesto
 
 logger = logging.getLogger(__name__)
 

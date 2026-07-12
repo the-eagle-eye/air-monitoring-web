@@ -17,9 +17,30 @@ const MOCK_INCIDENCIA: Record<string, unknown> = {
 };
 
 const MOCK_USUARIOS = [
-  { id: 1, email: 'tecnico1@oefa.gob.pe', nombre: 'Juan', apellido: 'Perez', rol: 'tecnico', estado: 'activo' },
-  { id: 2, email: 'tecnico2@oefa.gob.pe', nombre: 'Ana', apellido: 'Lopez', rol: 'tecnico', estado: 'activo' },
-  { id: 3, email: 'exttecnico@oefa.gob.pe', nombre: 'Baja', apellido: 'Retirado', rol: 'tecnico', estado: 'inactivo' },
+  {
+    id: 1,
+    email: 'tecnico1@oefa.gob.pe',
+    nombre: 'Juan',
+    apellido: 'Perez',
+    rol: 'tecnico',
+    estado: 'activo',
+  },
+  {
+    id: 2,
+    email: 'tecnico2@oefa.gob.pe',
+    nombre: 'Ana',
+    apellido: 'Lopez',
+    rol: 'tecnico',
+    estado: 'activo',
+  },
+  {
+    id: 3,
+    email: 'exttecnico@oefa.gob.pe',
+    nombre: 'Baja',
+    apellido: 'Retirado',
+    rol: 'tecnico',
+    estado: 'inactivo',
+  },
 ];
 
 const MOCK_REPUESTOS = [
@@ -33,28 +54,60 @@ const MOCK_REPUESTOS = [
 async function setupMocks(page: Page, incidencia = MOCK_INCIDENCIA) {
   // Catch-all registered first (lowest priority)
   await page.route(`${GW}/api/v1/incidencias**`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(EMPTY_LIST) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(EMPTY_LIST),
+    }),
   );
   await page.route(`${GW}/api/v1/usuarios`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_USUARIOS) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_USUARIOS),
+    }),
   );
   await page.route(`${GW}/api/v1/repuestos`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(MOCK_REPUESTOS) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(MOCK_REPUESTOS),
+    }),
   );
   await page.route(`${GW}/api/v1/problemas**`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ items: [], total: 0 }) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [], total: 0 }),
+    }),
   );
   await page.route(`${GW}/api/v1/incidencias/1/mantenimiento`, (route) =>
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) }),
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    }),
   );
   // Specific incidencia route registered last (highest priority)
   await page.route(`${GW}/api/v1/incidencias/1`, (route) => {
     if (route.request().method() === 'GET') {
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(incidencia) });
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(incidencia),
+      });
     } else {
       let parsed = {};
-      try { parsed = JSON.parse(route.request().postData() ?? '{}'); } catch { /* ignore */ }
-      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ...incidencia, ...parsed }) });
+      try {
+        parsed = JSON.parse(route.request().postData() ?? '{}');
+      } catch {
+        /* ignore */
+      }
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ...incidencia, ...parsed }),
+      });
     }
   });
 }
@@ -73,49 +126,79 @@ test.describe('Incidencia detail page (flujo ITIL por rol)', () => {
     await setupMocks(page);
     await gotoIncidencia(page);
 
-    await expect(page.getByText('Incidencia #1')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText('Incidencia #1')).toBeVisible({
+      timeout: 15_000,
+    });
     await expect(page.getByText('T102').first()).toBeVisible();
     await expect(page.getByText(/Alta/i).first()).toBeVisible();
   });
 
   // Coordinador: incidencia pendiente -> puede ASIGNAR técnico (no exige mantenimiento)
-  test('coordinador can assign technician on pendiente (no mantenimiento required)', async ({ page }) => {
+  test('coordinador can assign technician on pendiente (no mantenimiento required)', async ({
+    page,
+  }) => {
     await injectFakeAuth(page, 'administrador');
     await setupMocks(page);
     await gotoIncidencia(page);
 
     // botón Asignar visible; selector de técnico presente
-    await expect(page.getByRole('button', { name: /^Asignar$/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /^Asignar$/i })).toBeVisible({
+      timeout: 15_000,
+    });
     const tecSelect = page.locator('select').first();
-    await expect(tecSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
+    await expect(
+      tecSelect.locator('option', { hasText: 'Juan Perez' }),
+    ).toBeAttached();
     // NO se le pide llenar mantenimiento para asignar (no hay botón "Guardar mantenimiento")
-    await expect(page.getByRole('button', { name: /Guardar mantenimiento/i })).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: /Guardar mantenimiento/i }),
+    ).toHaveCount(0);
   });
 
   // Coordinador: incidencia YA asignada (en_ejecucion) -> puede RE-ASIGNAR;
   // la lista de responsables muestra solo técnicos ACTIVOS (excluye inactivos).
-  test('coordinador can re-assign on en_ejecucion; only active tecnicos listed', async ({ page }) => {
+  test('coordinador can re-assign on en_ejecucion; only active tecnicos listed', async ({
+    page,
+  }) => {
     await injectFakeAuth(page, 'administrador');
-    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'en_ejecucion', responsable_id: 1 });
+    await setupMocks(page, {
+      ...MOCK_INCIDENCIA,
+      estado: 'en_ejecucion',
+      responsable_id: 1,
+    });
     await gotoIncidencia(page);
 
     // botón "Re-asignar" visible (no "Asignar")
-    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeVisible(
+      { timeout: 15_000 },
+    );
     const tecSelect = page.locator('select').first();
     // técnicos activos presentes
-    await expect(tecSelect.locator('option', { hasText: 'Juan Perez' })).toBeAttached();
-    await expect(tecSelect.locator('option', { hasText: 'Ana Lopez' })).toBeAttached();
+    await expect(
+      tecSelect.locator('option', { hasText: 'Juan Perez' }),
+    ).toBeAttached();
+    await expect(
+      tecSelect.locator('option', { hasText: 'Ana Lopez' }),
+    ).toBeAttached();
     // técnico inactivo NO aparece
-    await expect(tecSelect.locator('option', { hasText: 'Baja Retirado' })).toHaveCount(0);
+    await expect(
+      tecSelect.locator('option', { hasText: 'Baja Retirado' }),
+    ).toHaveCount(0);
   });
 
   // BUG: incidencia asignada a la COORDINADORA (no un técnico, id fuera de la lista)
   // el selector NO debe mostrar falsamente al primer técnico como seleccionado; debe
   // quedar en "Seleccionar técnico" y el botón Re-asignar deshabilitado hasta elegir.
-  test('reassign selector no preselecciona un responsable que no es técnico', async ({ page }) => {
+  test('reassign selector no preselecciona un responsable que no es técnico', async ({
+    page,
+  }) => {
     await injectFakeAuth(page, 'administrador');
     // responsable_id: 99 = coordinador ajeno a la lista de técnicos (como Maria Huaman)
-    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'en_ejecucion', responsable_id: 99 });
+    await setupMocks(page, {
+      ...MOCK_INCIDENCIA,
+      estado: 'en_ejecucion',
+      responsable_id: 99,
+    });
     await gotoIncidencia(page);
 
     const tecSelect = page.locator('select').first();
@@ -123,34 +206,61 @@ test.describe('Incidencia detail page (flujo ITIL por rol)', () => {
     // el value del select debe ser vacío (placeholder), NO el primer técnico
     await expect(tecSelect).toHaveValue('');
     // el botón Re-asignar está deshabilitado hasta que se elija un técnico real
-    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: /Re-asignar/i }),
+    ).toBeDisabled();
 
     // al elegir un técnico real, se habilita
     await tecSelect.selectOption({ label: 'Juan Perez' });
-    await expect(page.getByRole('button', { name: /Re-asignar/i })).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: /Re-asignar/i }),
+    ).toBeEnabled();
   });
 
   // Coordinador: incidencia resuelta -> puede VERIFICAR Y CERRAR
   test('coordinador sees Verificar y cerrar on resuelto', async ({ page }) => {
     await injectFakeAuth(page, 'administrador');
-    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'resuelto', responsable_id: 1,
-      mantenimiento_correctivo: { id: 1, diagnostico: 'd', acciones_realizadas: 'a', conclusion: 'c' } });
+    await setupMocks(page, {
+      ...MOCK_INCIDENCIA,
+      estado: 'resuelto',
+      responsable_id: 1,
+      mantenimiento_correctivo: {
+        id: 1,
+        diagnostico: 'd',
+        acciones_realizadas: 'a',
+        conclusion: 'c',
+      },
+    });
     await gotoIncidencia(page);
 
-    await expect(page.getByRole('button', { name: /Verificar y cerrar/i })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByRole('button', { name: /Verificar y cerrar/i }),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   // Técnico: incidencia en_ejecucion asignada -> ve el formulario de mantenimiento
   test('tecnico sees mantenimiento form on en_ejecucion', async ({ page }) => {
     await injectFakeAuth(page, 'tecnico');
-    await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'en_ejecucion', responsable_id: 1 });
+    await setupMocks(page, {
+      ...MOCK_INCIDENCIA,
+      estado: 'en_ejecucion',
+      responsable_id: 1,
+    });
     await gotoIncidencia(page);
 
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: /Guardar mantenimiento/i })).toBeVisible();
+    await expect(page.locator('textarea').first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByRole('button', { name: /Guardar mantenimiento/i }),
+    ).toBeVisible();
     // el técnico NO ve acciones de coordinador
-    await expect(page.getByRole('button', { name: /Verificar y cerrar/i })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^Asignar$/i })).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: /Verificar y cerrar/i }),
+    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Asignar$/i })).toHaveCount(
+      0,
+    );
   });
 
   test('Ver Equipo link points to correct device', async ({ page }) => {
@@ -169,7 +279,11 @@ test.describe('Incidencia detail page (flujo ITIL por rol)', () => {
     await setupMocks(page, { ...MOCK_INCIDENCIA, estado: 'finalizado' });
     await gotoIncidencia(page);
 
-    await expect(page.getByText('Incidencia #1')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole('button', { name: /Asignar|Verificar y cerrar/i })).toHaveCount(0);
+    await expect(page.getByText('Incidencia #1')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(
+      page.getByRole('button', { name: /Asignar|Verificar y cerrar/i }),
+    ).toHaveCount(0);
   });
 });

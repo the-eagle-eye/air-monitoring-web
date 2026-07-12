@@ -12,7 +12,6 @@ import HealthStateBadge from '@/components/dashboard/HealthStateBadge';
 import type { Incidencia, Repuesto } from '@/types/ops';
 import type { Equipo } from '@/types/lectura';
 import type { HealthDeviceState } from '@/types/healthMonitor';
-import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
 
 const PRIORIDAD_VARIANT: Record<string, 'danger' | 'warning' | 'success'> = {
   alta: 'danger',
@@ -46,7 +45,9 @@ export default function DashboardTecnicoPage() {
   const [enEjecucion, setEnEjecucion] = useState<Incidencia[]>([]);
   const [finalizadas, setFinalizadas] = useState<Incidencia[]>([]);
   const [equipos, setEquipos] = useState<Equipo[]>([]);
-  const [healthStates, setHealthStates] = useState<Record<string, HealthDeviceState | null>>({});
+  const [healthStates, setHealthStates] = useState<
+    Record<string, HealthDeviceState | null>
+  >({});
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -78,14 +79,19 @@ export default function DashboardTecnicoPage() {
         setHealthStates(health);
       })
       .catch(() => {})
-      .finally(() => { if (!silent) setLoading(false); });
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
   usePolling(() => loadData(true), 30_000);
 
   const activeIncidencias = [...pendientes, ...enEjecucion].sort(
-    (a, b) => parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime(),
+    (a, b) =>
+      parseUTC(b.created_at).getTime() - parseUTC(a.created_at).getTime(),
   );
 
   // Finalizadas this month
@@ -96,8 +102,12 @@ export default function DashboardTecnicoPage() {
   );
 
   // Unique active device_ids
-  const activeDeviceIds = [...new Set(activeIncidencias.map((i) => i.device_id))];
-  const relatedEquipos = equipos.filter((eq) => activeDeviceIds.includes(eq.device_id));
+  const activeDeviceIds = [
+    ...new Set(activeIncidencias.map((i) => i.device_id)),
+  ];
+  const relatedEquipos = equipos.filter((eq) =>
+    activeDeviceIds.includes(eq.device_id),
+  );
 
   // Repuestos used in finalized mantenimientos
   const repuestosUsados = finalizadas
@@ -115,7 +125,9 @@ export default function DashboardTecnicoPage() {
   if (loading) {
     return (
       <div className="mx-auto max-w-7xl px-4 py-8">
-        <div className="py-12 text-center text-zinc-400">Cargando dashboard...</div>
+        <div className="py-12 text-center text-zinc-400">
+          Cargando dashboard...
+        </div>
       </div>
     );
   }
@@ -136,10 +148,30 @@ export default function DashboardTecnicoPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <KpiCard label="Pendientes" value={kpis.pendientes} color="text-amber-600" bg="bg-amber-50 dark:bg-amber-900/20" />
-        <KpiCard label="En Ejecucion" value={kpis.enEjecucion} color="text-blue-600" bg="bg-blue-50 dark:bg-blue-900/20" />
-        <KpiCard label="Finalizadas (mes)" value={kpis.finalizadasMes} color="text-green-600" bg="bg-green-50 dark:bg-green-900/20" />
-        <KpiCard label="Equipos Activos" value={kpis.equiposActivos} color="text-zinc-600" bg="bg-zinc-50 dark:bg-zinc-800" />
+        <KpiCard
+          label="Pendientes"
+          value={kpis.pendientes}
+          color="text-amber-600"
+          bg="bg-amber-50 dark:bg-amber-900/20"
+        />
+        <KpiCard
+          label="En Ejecucion"
+          value={kpis.enEjecucion}
+          color="text-blue-600"
+          bg="bg-blue-50 dark:bg-blue-900/20"
+        />
+        <KpiCard
+          label="Finalizadas (mes)"
+          value={kpis.finalizadasMes}
+          color="text-green-600"
+          bg="bg-green-50 dark:bg-green-900/20"
+        />
+        <KpiCard
+          label="Equipos Activos"
+          value={kpis.equiposActivos}
+          color="text-zinc-600"
+          bg="bg-zinc-50 dark:bg-zinc-800"
+        />
       </div>
 
       {/* Mis Incidencias Activas */}
@@ -167,7 +199,10 @@ export default function DashboardTecnicoPage() {
               >
                 <div className="flex items-center gap-2">
                   <Badge
-                    label={inc.prioridad.charAt(0).toUpperCase() + inc.prioridad.slice(1)}
+                    label={
+                      inc.prioridad.charAt(0).toUpperCase() +
+                      inc.prioridad.slice(1)
+                    }
                     variant={PRIORIDAD_VARIANT[inc.prioridad] ?? 'default'}
                   />
                   <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
@@ -183,7 +218,9 @@ export default function DashboardTecnicoPage() {
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-400">{timeAgo(inc.created_at)}</span>
+                  <span className="text-xs text-zinc-400">
+                    {timeAgo(inc.created_at)}
+                  </span>
                   <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                     Gestionar
                   </span>
@@ -234,7 +271,10 @@ export default function DashboardTecnicoPage() {
                           {eq.device_id}
                         </span>
                         {health?.health_state && (
-                          <HealthStateBadge state={health.health_state} size="sm" />
+                          <HealthStateBadge
+                            state={health.health_state}
+                            size="sm"
+                          />
                         )}
                       </div>
                       <p className="mt-0.5 text-xs text-zinc-500">
@@ -254,7 +294,9 @@ export default function DashboardTecnicoPage() {
                           </span>
                         </div>
                       ) : (
-                        <span className="text-xs text-zinc-400">Sin datos de salud</span>
+                        <span className="text-xs text-zinc-400">
+                          Sin datos de salud
+                        </span>
                       )}
                       <div className="mt-1 text-xs text-zinc-400">
                         {incCount} incidencia{incCount > 1 ? 's' : ''}
@@ -280,7 +322,7 @@ export default function DashboardTecnicoPage() {
 
           {repuestosUsados.length > 0 && (
             <div className="mb-4">
-              <h3 className="mb-2 text-xs font-medium uppercase text-zinc-500">
+              <h3 className="mb-2 text-xs font-medium text-zinc-500 uppercase">
                 Usados recientemente
               </h3>
               <div className="flex flex-wrap gap-1.5">
@@ -311,7 +353,9 @@ export default function DashboardTecnicoPage() {
                   key={cat}
                   className="flex items-center justify-between rounded-md border border-zinc-100 px-3 py-2 dark:border-zinc-800"
                 >
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">{cat}</span>
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">
+                    {cat}
+                  </span>
                   <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                     {count}
                   </span>
@@ -345,8 +389,12 @@ function KpiCard({
   bg: string;
 }) {
   return (
-    <div className={`rounded-lg border border-zinc-200 p-4 dark:border-zinc-700 ${bg}`}>
-      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{label}</p>
+    <div
+      className={`rounded-lg border border-zinc-200 p-4 dark:border-zinc-700 ${bg}`}
+    >
+      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        {label}
+      </p>
       <p className={`mt-1 text-2xl font-bold ${color}`}>{value}</p>
     </div>
   );

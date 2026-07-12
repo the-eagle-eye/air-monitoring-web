@@ -26,12 +26,16 @@ export default function EquiposPendientes({
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function handleConfirm(deviceId: string) {
     setConfirming(deviceId);
     try {
-      await confirmarEquipo(deviceId, { criticidad: crit[deviceId] ?? 'media' });
+      await confirmarEquipo(deviceId, {
+        criticidad: crit[deviceId] ?? 'media',
+      });
       setPendientes((prev) => prev.filter((e) => e.device_id !== deviceId));
       onConfirmed?.();
     } catch {
@@ -53,8 +57,9 @@ export default function EquiposPendientes({
         </h2>
       </div>
       <p className="mb-3 text-xs text-amber-700 dark:text-amber-400">
-        Estos equipos empezaron a enviar lecturas pero no estaban registrados. Se
-        crearon en cuarentena. Confírmalos para activarlos (asigna su criticidad).
+        Estos equipos empezaron a enviar lecturas pero no estaban registrados.
+        Se crearon en cuarentena. Confírmalos para activarlos (asigna su
+        criticidad).
       </p>
       <div className="space-y-2">
         {pendientes.map((eq) => (
@@ -72,10 +77,14 @@ export default function EquiposPendientes({
             </div>
             {canConfirm ? (
               <div className="flex items-center gap-2">
-                <label className="text-xs text-zinc-500 dark:text-zinc-400">Criticidad</label>
+                <label className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Criticidad
+                </label>
                 <select
                   value={crit[eq.device_id] ?? 'media'}
-                  onChange={(e) => setCrit((p) => ({ ...p, [eq.device_id]: e.target.value }))}
+                  onChange={(e) =>
+                    setCrit((p) => ({ ...p, [eq.device_id]: e.target.value }))
+                  }
                   className="rounded border border-zinc-300 px-2 py-1 text-xs dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                 >
                   <option value="baja">Baja</option>
@@ -91,7 +100,9 @@ export default function EquiposPendientes({
                 </button>
               </div>
             ) : (
-              <span className="text-xs text-zinc-400">Pendiente de aprobación</span>
+              <span className="text-xs text-zinc-400">
+                Pendiente de aprobación
+              </span>
             )}
           </div>
         ))}

@@ -30,6 +30,7 @@ class MonitorAlertRequest(BaseModel):
 class LinkProblemaRequest(BaseModel):
     problema_id: int | None = None  # None = desvincular
 
+
 router = APIRouter()
 
 
@@ -168,7 +169,7 @@ def submit_mantenimiento(
 
 @router.post("/monitor-alert")
 def monitor_alert(data: MonitorAlertRequest, db: Session = Depends(get_db)):
-    """Regla de consolidacion del monitor de salud (docs/regla-consolidacion-alertas.md).
+    """Regla de consolidacion del monitor (docs/regla-consolidacion-alertas.md).
 
     Un unico incidente correctivo abierto por equipo (origen=monitor_salud):
     crea, escala prioridad o no hace nada segun la severidad recibida.

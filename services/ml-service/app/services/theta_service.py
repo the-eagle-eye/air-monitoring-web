@@ -65,8 +65,14 @@ def recalibrate_theta(db: Session, station_id: str,
 
     errors = _normal_recon_errors(db, station_id, since)
     if len(errors) < MIN_NORMAL_READINGS:
-        return {"station_id": station_id, "action": "skipped",
-                "reason": f"pocas lecturas normales ({len(errors)} < {MIN_NORMAL_READINGS})"}
+        return {
+            "station_id": station_id,
+            "action": "skipped",
+            "reason": (
+                f"pocas lecturas normales "
+                f"({len(errors)} < {MIN_NORMAL_READINGS})"
+            ),
+        }
 
     theta_new = float(np.percentile(errors, THETA_PERCENTILE))
 

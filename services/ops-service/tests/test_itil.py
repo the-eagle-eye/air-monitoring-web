@@ -11,7 +11,7 @@ from app.schemas.incidencia import IncidenciaCreate, IncidenciaUpdate
 
 @pytest.mark.parametrize("impacto,urgencia,esperado", [
     ("alta", "alta", "alta"),   ("alta", "media", "alta"),  ("alta", "baja", "media"),
-    ("media", "alta", "alta"),  ("media", "media", "media"),("media", "baja", "baja"),
+    ("media", "alta", "alta"),  ("media", "media", "media"), ("media", "baja", "baja"),
     ("baja", "alta", "media"),  ("baja", "media", "baja"),  ("baja", "baja", "baja"),
 ])
 def test_priority_matrix(impacto, urgencia, esperado):
@@ -352,8 +352,9 @@ class TestReincidentes:
     def test_excluye_equipo_con_problema_abierto(self, client):
         # T101 reincidente PERO ya tiene un problema abierto -> no se sugiere
         self._crear_correctivas(client, "T101", 3)
+        # estado=abierto
         client.post("/api/v1/problemas", json={
-            "titulo": "Falla recurrente lámpara", "device_id": "T101"})  # estado=abierto
+            "titulo": "Falla recurrente lámpara", "device_id": "T101"})
 
         r = client.get("/api/v1/problemas/reincidentes")
         assert "T101" not in {i["device_id"] for i in r.json()["items"]}

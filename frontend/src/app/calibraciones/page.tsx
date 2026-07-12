@@ -38,31 +38,44 @@ export default function CalibracionesPage() {
   const [formProveedor, setFormProveedor] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const loadData = useCallback((silent = false) => {
-    if (!silent) setLoading(true);
-    fetchCalibracionesOps({
-      device_id: filterDevice || undefined,
-      page,
-      page_size: pageSize,
-    })
-      .then((res) => {
-        setCalibraciones(res.items);
-        setTotal(res.total);
-        setLastUpdated(new Date());
+  const loadData = useCallback(
+    (silent = false) => {
+      if (!silent) setLoading(true);
+      fetchCalibracionesOps({
+        device_id: filterDevice || undefined,
+        page,
+        page_size: pageSize,
       })
-      .catch((err) => { if (!silent) setError(err.message); })
-      .finally(() => { if (!silent) setLoading(false); });
-  }, [filterDevice, page]);
+        .then((res) => {
+          setCalibraciones(res.items);
+          setTotal(res.total);
+          setLastUpdated(new Date());
+        })
+        .catch((err) => {
+          if (!silent) setError(err.message);
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+    },
+    [filterDevice, page],
+  );
 
   useEffect(() => {
-    fetchEquipos().then((eqs) => {
-      setEquipos(eqs);
-      if (eqs.length > 0) setFormDevice(eqs[0].device_id);
-    }).catch(() => {});
-    fetchProveedores().then(setProveedores).catch(() => {});
+    fetchEquipos()
+      .then((eqs) => {
+        setEquipos(eqs);
+        if (eqs.length > 0) setFormDevice(eqs[0].device_id);
+      })
+      .catch(() => {});
+    fetchProveedores()
+      .then(setProveedores)
+      .catch(() => {});
   }, []);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   usePolling(() => loadData(true), 30_000);
 
@@ -89,7 +102,9 @@ export default function CalibracionesPage() {
 
   const totalPages = Math.ceil(total / pageSize);
 
-  const proveedorMap = Object.fromEntries(proveedores.map((p) => [p.id, p.nombre]));
+  const proveedorMap = Object.fromEntries(
+    proveedores.map((p) => [p.id, p.nombre]),
+  );
 
   const columns = [
     { key: 'id', header: 'ID' },
@@ -138,12 +153,15 @@ export default function CalibracionesPage() {
       key: 'proveedor_id',
       header: 'Proveedor',
       render: (item: CalibracionOps) =>
-        item.proveedor_id ? (proveedorMap[item.proveedor_id] ?? `#${item.proveedor_id}`) : '—',
+        item.proveedor_id
+          ? (proveedorMap[item.proveedor_id] ?? `#${item.proveedor_id}`)
+          : '—',
     },
     {
       key: 'created_at',
       header: 'Creada',
-      render: (item: CalibracionOps) => new Date(item.created_at).toLocaleDateString(),
+      render: (item: CalibracionOps) =>
+        new Date(item.created_at).toLocaleDateString(),
     },
     {
       key: 'acciones',
@@ -202,7 +220,10 @@ export default function CalibracionesPage() {
 
       {canCrear && showForm && (
         <div className="mb-6 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
-          <form onSubmit={handleCreate} className="flex flex-wrap items-end gap-4">
+          <form
+            onSubmit={handleCreate}
+            className="flex flex-wrap items-end gap-4"
+          >
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Equipo
@@ -231,7 +252,9 @@ export default function CalibracionesPage() {
               >
                 <option value="">Sin proveedor</option>
                 {proveedores.map((p) => (
-                  <option key={p.id} value={p.id}>{p.nombre}</option>
+                  <option key={p.id} value={p.id}>
+                    {p.nombre}
+                  </option>
                 ))}
               </select>
             </div>
@@ -260,25 +283,36 @@ export default function CalibracionesPage() {
       <div className="mb-4 flex items-center gap-3">
         <select
           value={filterDevice}
-          onChange={(e) => { setFilterDevice(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setFilterDevice(e.target.value);
+            setPage(1);
+          }}
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
         >
           <option value="">Todos los equipos</option>
           {equipos.map((eq) => (
-            <option key={eq.device_id} value={eq.device_id}>{eq.device_id}</option>
+            <option key={eq.device_id} value={eq.device_id}>
+              {eq.device_id}
+            </option>
           ))}
         </select>
         <span className="text-sm text-zinc-500">{total} resultados</span>
       </div>
 
       {error && (
-        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-md bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
       )}
 
       {loading ? (
         <div className="py-12 text-center text-zinc-400">Cargando...</div>
       ) : (
-        <DataTable columns={columns} data={calibraciones} keyExtractor={(c) => c.id} />
+        <DataTable
+          columns={columns}
+          data={calibraciones}
+          keyExtractor={(c) => c.id}
+        />
       )}
 
       {totalPages > 1 && (
@@ -290,7 +324,9 @@ export default function CalibracionesPage() {
           >
             Anterior
           </button>
-          <span className="text-sm text-zinc-500">Pagina {page} de {totalPages}</span>
+          <span className="text-sm text-zinc-500">
+            Pagina {page} de {totalPages}
+          </span>
           <button
             onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
             disabled={page >= totalPages}

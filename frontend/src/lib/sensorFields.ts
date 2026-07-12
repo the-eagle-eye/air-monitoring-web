@@ -62,4 +62,6 @@ export function readSensor(
   return null;
 }
 
-export const SENSOR_SNAKE_KEYS = Object.keys(SNAKE_TO_JSONB) as (keyof typeof SNAKE_TO_JSONB)[];
+export const SENSOR_SNAKE_KEYS = Object.keys(
+  SNAKE_TO_JSONB,
+) as (keyof typeof SNAKE_TO_JSONB)[];

@@ -16,9 +16,7 @@ export default function ClientLayout({
   return (
     <AuthProvider>
       {!isLoginPage && <Header />}
-      <RouteGuard>
-        {children}
-      </RouteGuard>
+      <RouteGuard>{children}</RouteGuard>
     </AuthProvider>
   );
 }

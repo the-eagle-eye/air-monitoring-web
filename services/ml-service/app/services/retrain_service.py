@@ -14,7 +14,6 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.model_metric import ModelMetric

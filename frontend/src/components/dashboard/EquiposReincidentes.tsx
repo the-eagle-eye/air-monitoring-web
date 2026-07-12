@@ -38,7 +38,9 @@ export default function EquiposReincidentes({
       .finally(() => setLoading(false));
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   async function handleCrear(eq: EquipoReincidente) {
     setCreando(eq.device_id);
@@ -57,7 +59,9 @@ export default function EquiposReincidentes({
         eq.incidencia_ids.map((id) => linkIncidenciaProblema(id, problema.id)),
       );
       setItems((prev) => prev.filter((i) => i.device_id !== eq.device_id));
-      setMensaje(`Problema #${problema.id} creado para ${eq.device_id} con ${eq.incidencia_ids.length} incidencias vinculadas`);
+      setMensaje(
+        `Problema #${problema.id} creado para ${eq.device_id} con ${eq.incidencia_ids.length} incidencias vinculadas`,
+      );
       onProblemaCreado?.();
     } catch {
       setMensaje('No se pudo crear el problema; reintenta');
@@ -81,7 +85,9 @@ export default function EquiposReincidentes({
           href="/problemas"
           className="text-xs font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400"
         >
-          {abiertos > 0 ? `${abiertos} abierto${abiertos > 1 ? 's' : ''} →` : 'Ver todos →'}
+          {abiertos > 0
+            ? `${abiertos} abierto${abiertos > 1 ? 's' : ''} →`
+            : 'Ver todos →'}
         </Link>
       </div>
 
@@ -89,7 +95,8 @@ export default function EquiposReincidentes({
         <div className="flex h-[120px] flex-col items-center justify-center gap-1 text-center text-sm text-zinc-400">
           <span>Sin equipos con correctivas recurrentes.</span>
           <span className="text-xs">
-            Se sugerirá abrir un problema si un equipo acumula ≥3 correctivas en 90 días.
+            Se sugerirá abrir un problema si un equipo acumula ≥3 correctivas en
+            90 días.
           </span>
         </div>
       ) : (

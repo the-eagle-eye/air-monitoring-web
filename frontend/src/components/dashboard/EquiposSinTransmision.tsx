@@ -44,9 +44,10 @@ export default function EquiposSinTransmision({
             {sinDatos.map((s) => {
               const noTx = s.transmission_state === 'SIN_TRANSMISION';
               const motivo = noTx ? 'No transmite' : 'Dato inválido';
-              const sev = noTx && s.transmission_severity
-                ? SEVERITY_LABEL[s.transmission_severity]
-                : null;
+              const sev =
+                noTx && s.transmission_severity
+                  ? SEVERITY_LABEL[s.transmission_severity]
+                  : null;
               const lastTs = s.last_reading_ts ?? s.updated_at;
               return (
                 <li

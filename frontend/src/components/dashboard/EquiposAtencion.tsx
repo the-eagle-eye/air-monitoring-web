@@ -49,15 +49,15 @@ function timeAgo(dateStr: string): string {
 // SANO): estos siguen visibles como "En seguimiento" para que el coordinador no
 // pierda de vista un equipo con problema aún sin cerrar. Reemplaza a "Alertas
 // Recientes" (modelo RF), retirada con el RF.
-export default function EquiposAtencion({ states, openIncidencias = [] }: EquiposAtencionProps) {
+export default function EquiposAtencion({
+  states,
+  openIncidencias = [],
+}: EquiposAtencionProps) {
   // Equipos con incidencia correctiva abierta (dedup por device_id).
   const conIncidencia = new Set(openIncidencias.map((i) => i.device_id));
 
   // Unión de device_ids: los que tienen estado de salud + los que tienen incidencia.
-  const deviceIds = new Set<string>([
-    ...Object.keys(states),
-    ...conIncidencia,
-  ]);
+  const deviceIds = new Set<string>([...Object.keys(states), ...conIncidencia]);
 
   const items: AtencionItem[] = [];
   for (const id of deviceIds) {
@@ -117,7 +117,10 @@ export default function EquiposAtencion({ states, openIncidencias = [] }: Equipo
                 <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                   {item.device_id}
                 </span>
-                <span className="text-xs font-medium" style={{ color: item.color }}>
+                <span
+                  className="text-xs font-medium"
+                  style={{ color: item.color }}
+                >
                   {item.label}
                 </span>
                 {item.enSeguimiento && (

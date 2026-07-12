@@ -21,8 +21,11 @@ function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso.endsWith('Z') ? iso : iso + 'Z');
   return d.toLocaleString('es-PE', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -47,11 +50,16 @@ export default function IncidenciaDetailPage() {
   const [mtoConclusion, setMtoConclusion] = useState('');
   const [selectedRepuestoIds, setSelectedRepuestoIds] = useState<number[]>([]);
   const [repuestosOpen, setRepuestosOpen] = useState(false);
-  const [adjuntos, setAdjuntos] = useState<{ filename: string; file_url: string }[]>([]);
+  const [adjuntos, setAdjuntos] = useState<
+    { filename: string; file_url: string }[]
+  >([]);
 
   // Save state
   const [saving, setSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<{ text: string; isError: boolean } | null>(null);
+  const [saveMsg, setSaveMsg] = useState<{
+    text: string;
+    isError: boolean;
+  } | null>(null);
 
   const repuestosRef = useRef<HTMLDivElement>(null);
 
@@ -67,11 +75,15 @@ export default function IncidenciaDetailPage() {
         setEditResponsable(safeEditResponsable(inc, users));
         setUsuarios(users);
         setRepuestos(reps);
-        fetchProblemas().then((r) => setProblemas(r.items)).catch(() => {});
+        fetchProblemas()
+          .then((r) => setProblemas(r.items))
+          .catch(() => {});
         // Pre-populate mantenimiento fields if data exists
         if (inc.mantenimiento_correctivo) {
           setMtoDiagnostico(inc.mantenimiento_correctivo.diagnostico ?? '');
-          setMtoAcciones(inc.mantenimiento_correctivo.acciones_realizadas ?? '');
+          setMtoAcciones(
+            inc.mantenimiento_correctivo.acciones_realizadas ?? '',
+          );
           setMtoConclusion(inc.mantenimiento_correctivo.conclusion ?? '');
         }
       })
@@ -82,7 +94,10 @@ export default function IncidenciaDetailPage() {
   // Close repuestos dropdown on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (repuestosRef.current && !repuestosRef.current.contains(e.target as Node)) {
+      if (
+        repuestosRef.current &&
+        !repuestosRef.current.contains(e.target as Node)
+      ) {
         setRepuestosOpen(false);
       }
     }
@@ -110,7 +125,9 @@ export default function IncidenciaDetailPage() {
     isCoordinador && (estado === 'pendiente' || estado === 'en_ejecucion');
   const yaAsignada = estado === 'en_ejecucion';
   const canRegistrarMantenimiento =
-    isTecnico && !hasMantenimiento && (estado === 'en_ejecucion' || estado === 'pendiente');
+    isTecnico &&
+    !hasMantenimiento &&
+    (estado === 'en_ejecucion' || estado === 'pendiente');
   const canCerrar = isCoordinador && estado === 'resuelto';
   const canCancelar = isCoordinador && !isCerrada;
 
@@ -128,12 +145,17 @@ export default function IncidenciaDetailPage() {
       await updateIncidencia(id, { responsable_id: Number(editResponsable) });
       await refreshIncidencia();
       setSaveMsg({
-        text: reasignando ? 'Incidencia re-asignada' : 'Incidencia asignada al técnico',
+        text: reasignando
+          ? 'Incidencia re-asignada'
+          : 'Incidencia asignada al técnico',
         isError: false,
       });
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
-      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al asignar', isError: true });
+      setSaveMsg({
+        text: err instanceof Error ? err.message : 'Error al asignar',
+        isError: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -146,17 +168,24 @@ export default function IncidenciaDetailPage() {
     try {
       await updateIncidencia(id, { estado: 'finalizado' });
       await refreshIncidencia();
-      setSaveMsg({ text: 'Incidencia cerrada — se generó la calibración', isError: false });
+      setSaveMsg({
+        text: 'Incidencia cerrada — se generó la calibración',
+        isError: false,
+      });
       setTimeout(() => setSaveMsg(null), 4000);
     } catch (err) {
-      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al cerrar', isError: true });
+      setSaveMsg({
+        text: err instanceof Error ? err.message : 'Error al cerrar',
+        isError: true,
+      });
     } finally {
       setSaving(false);
     }
   }
 
   async function handleCancelar() {
-    if (!confirm('¿Cancelar esta incidencia? (falso positivo / no aplica)')) return;
+    if (!confirm('¿Cancelar esta incidencia? (falso positivo / no aplica)'))
+      return;
     setSaving(true);
     setSaveMsg(null);
     try {
@@ -165,7 +194,10 @@ export default function IncidenciaDetailPage() {
       setSaveMsg({ text: 'Incidencia cancelada', isError: false });
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
-      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al cancelar', isError: true });
+      setSaveMsg({
+        text: err instanceof Error ? err.message : 'Error al cancelar',
+        isError: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -173,8 +205,15 @@ export default function IncidenciaDetailPage() {
 
   // Técnico: registrar mantenimiento (auto -> resuelto en el backend)
   async function handleSubmitMantenimiento() {
-    if (!mtoDiagnostico.trim() || !mtoAcciones.trim() || !mtoConclusion.trim()) {
-      setSaveMsg({ text: 'Diagnóstico, Acciones y Conclusión son obligatorios', isError: true });
+    if (
+      !mtoDiagnostico.trim() ||
+      !mtoAcciones.trim() ||
+      !mtoConclusion.trim()
+    ) {
+      setSaveMsg({
+        text: 'Diagnóstico, Acciones y Conclusión son obligatorios',
+        isError: true,
+      });
       return;
     }
     setSaving(true);
@@ -189,10 +228,16 @@ export default function IncidenciaDetailPage() {
         adjuntos: adjuntos.filter((a) => a.filename && a.file_url),
       });
       await refreshIncidencia();
-      setSaveMsg({ text: 'Mantenimiento registrado — incidencia marcada como Resuelta', isError: false });
+      setSaveMsg({
+        text: 'Mantenimiento registrado — incidencia marcada como Resuelta',
+        isError: false,
+      });
       setTimeout(() => setSaveMsg(null), 4000);
     } catch (err) {
-      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al guardar', isError: true });
+      setSaveMsg({
+        text: err instanceof Error ? err.message : 'Error al guardar',
+        isError: true,
+      });
     } finally {
       setSaving(false);
     }
@@ -200,11 +245,19 @@ export default function IncidenciaDetailPage() {
 
   // Pre-selecciona el responsable en el selector SOLO si es un técnico activo
   // (los que aparecen en la lista); si no, deja el placeholder para forzar elección.
-  function safeEditResponsable(inc: { responsable_id: number | null }, users: Usuario[]) {
+  function safeEditResponsable(
+    inc: { responsable_id: number | null },
+    users: Usuario[],
+  ) {
     const esTecnicoActivo = users.some(
-      (u) => u.id === inc.responsable_id && u.rol === 'tecnico' && u.estado === 'activo',
+      (u) =>
+        u.id === inc.responsable_id &&
+        u.rol === 'tecnico' &&
+        u.estado === 'activo',
     );
-    return esTecnicoActivo && inc.responsable_id ? String(inc.responsable_id) : '';
+    return esTecnicoActivo && inc.responsable_id
+      ? String(inc.responsable_id)
+      : '';
   }
 
   async function refreshIncidencia() {
@@ -213,7 +266,9 @@ export default function IncidenciaDetailPage() {
     setEditResponsable(safeEditResponsable(refreshed, usuarios));
     if (refreshed.mantenimiento_correctivo) {
       setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
-      setMtoAcciones(refreshed.mantenimiento_correctivo.acciones_realizadas ?? '');
+      setMtoAcciones(
+        refreshed.mantenimiento_correctivo.acciones_realizadas ?? '',
+      );
       setMtoConclusion(refreshed.mantenimiento_correctivo.conclusion ?? '');
     }
   }
@@ -222,10 +277,16 @@ export default function IncidenciaDetailPage() {
     try {
       const updated = await linkIncidenciaProblema(id, problemaId);
       setIncidencia(updated);
-      setSaveMsg({ text: problemaId ? 'Vinculada al problema' : 'Desvinculada', isError: false });
+      setSaveMsg({
+        text: problemaId ? 'Vinculada al problema' : 'Desvinculada',
+        isError: false,
+      });
       setTimeout(() => setSaveMsg(null), 3000);
     } catch (err) {
-      setSaveMsg({ text: err instanceof Error ? err.message : 'Error al vincular', isError: true });
+      setSaveMsg({
+        text: err instanceof Error ? err.message : 'Error al vincular',
+        isError: true,
+      });
     }
   }
 
@@ -239,8 +300,14 @@ export default function IncidenciaDetailPage() {
     setAdjuntos((prev) => [...prev, { filename: '', file_url: '' }]);
   }
 
-  function updateAdjunto(index: number, field: 'filename' | 'file_url', value: string) {
-    setAdjuntos((prev) => prev.map((a, i) => (i === index ? { ...a, [field]: value } : a)));
+  function updateAdjunto(
+    index: number,
+    field: 'filename' | 'file_url',
+    value: string,
+  ) {
+    setAdjuntos((prev) =>
+      prev.map((a, i) => (i === index ? { ...a, [field]: value } : a)),
+    );
   }
 
   function removeAdjunto(index: number) {
@@ -248,14 +315,21 @@ export default function IncidenciaDetailPage() {
   }
 
   // Group repuestos by category
-  const repuestosByCategoria = repuestos.reduce<Record<string, Repuesto[]>>((acc, r) => {
-    if (!acc[r.categoria]) acc[r.categoria] = [];
-    acc[r.categoria].push(r);
-    return acc;
-  }, {});
+  const repuestosByCategoria = repuestos.reduce<Record<string, Repuesto[]>>(
+    (acc, r) => {
+      if (!acc[r.categoria]) acc[r.categoria] = [];
+      acc[r.categoria].push(r);
+      return acc;
+    },
+    {},
+  );
 
   if (loading) {
-    return <div className="mx-auto max-w-4xl px-4 py-12 text-center text-zinc-400">Cargando...</div>;
+    return (
+      <div className="mx-auto max-w-4xl px-4 py-12 text-center text-zinc-400">
+        Cargando...
+      </div>
+    );
   }
 
   if (error || !incidencia) {
@@ -329,22 +403,31 @@ export default function IncidenciaDetailPage() {
       <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
         <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Equipo</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Equipo
+            </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
               {incidencia.device_id}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Tipo</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Tipo
+            </dt>
             <dd className="mt-0.5">
               <Badge label="Correctiva" variant="danger" />
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Prioridad</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Prioridad
+            </dt>
             <dd className="mt-0.5">
               <Badge
-                label={incidencia.prioridad.charAt(0).toUpperCase() + incidencia.prioridad.slice(1)}
+                label={
+                  incidencia.prioridad.charAt(0).toUpperCase() +
+                  incidencia.prioridad.slice(1)
+                }
                 variant={
                   incidencia.prioridad === 'alta'
                     ? 'danger'
@@ -356,13 +439,15 @@ export default function IncidenciaDetailPage() {
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Estado</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Estado
+            </dt>
             <dd className="mt-0.5">
               <StatusBadge status={incidencia.estado} />
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
               Responsable
             </dt>
             <dd className="mt-0.5">
@@ -374,7 +459,9 @@ export default function IncidenciaDetailPage() {
                     <span className="text-xs text-zinc-500 dark:text-zinc-400">
                       Asignada a:{' '}
                       <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                        {responsable ? `${responsable.nombre} ${responsable.apellido}` : '—'}
+                        {responsable
+                          ? `${responsable.nombre} ${responsable.apellido}`
+                          : '—'}
                       </span>
                     </span>
                   )}
@@ -384,9 +471,13 @@ export default function IncidenciaDetailPage() {
                       onChange={(e) => setEditResponsable(e.target.value)}
                       className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                     >
-                      <option value="" disabled>Seleccionar técnico</option>
+                      <option value="" disabled>
+                        Seleccionar técnico
+                      </option>
                       {usuarios
-                        .filter((u) => u.rol === 'tecnico' && u.estado === 'activo')
+                        .filter(
+                          (u) => u.rol === 'tecnico' && u.estado === 'activo',
+                        )
                         .map((u) => (
                           <option key={u.id} value={u.id}>
                             {u.nombre} {u.apellido}
@@ -404,32 +495,48 @@ export default function IncidenciaDetailPage() {
                 </div>
               ) : (
                 <span className="text-sm text-zinc-900 dark:text-zinc-100">
-                  {responsable ? `${responsable.nombre} ${responsable.apellido}` : 'Sin asignar'}
+                  {responsable
+                    ? `${responsable.nombre} ${responsable.apellido}`
+                    : 'Sin asignar'}
                 </span>
               )}
             </dd>
           </div>
           {/* ITIL: impacto × urgencia = prioridad (derivada) + categoría */}
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Impacto</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Impacto
+            </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {(incidencia.impacto ?? 'media').replace(/^\w/, (c) => c.toUpperCase())}
+              {(incidencia.impacto ?? 'media').replace(/^\w/, (c) =>
+                c.toUpperCase(),
+              )}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Urgencia</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Urgencia
+            </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {(incidencia.urgencia ?? 'media').replace(/^\w/, (c) => c.toUpperCase())}
+              {(incidencia.urgencia ?? 'media').replace(/^\w/, (c) =>
+                c.toUpperCase(),
+              )}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Categoría</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Categoría
+            </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {(incidencia.categoria ?? 'otro').replace(/^\w/, (c) => c.toUpperCase())}
+              {(incidencia.categoria ?? 'otro').replace(/^\w/, (c) =>
+                c.toUpperCase(),
+              )}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Creada</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Creada
+            </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
               {new Date(incidencia.created_at).toLocaleString()}
             </dd>
@@ -439,19 +546,25 @@ export default function IncidenciaDetailPage() {
         {/* ITIL: timeline SLA */}
         <div className="mb-4 grid grid-cols-3 gap-4 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Asignación</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Asignación
+            </dt>
             <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
               {fmtDate(incidencia.fecha_asignacion)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Resolución</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Resolución
+            </dt>
             <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
               {fmtDate(incidencia.fecha_resolucion)}
             </dd>
           </div>
           <div>
-            <dt className="text-xs font-medium uppercase text-zinc-500">Cierre</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Cierre
+            </dt>
             <dd className="mt-0.5 text-xs text-zinc-700 dark:text-zinc-300">
               {fmtDate(incidencia.fecha_cierre)}
             </dd>
@@ -460,7 +573,9 @@ export default function IncidenciaDetailPage() {
 
         {incidencia.descripcion && (
           <div className="mb-4">
-            <dt className="text-xs font-medium uppercase text-zinc-500">Descripcion</dt>
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
+              Descripcion
+            </dt>
             <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
               {incidencia.descripcion}
             </dd>
@@ -470,14 +585,16 @@ export default function IncidenciaDetailPage() {
         {/* ITIL: vincular a un Problema (causa raíz) — gestión del coordinador */}
         {isCoordinador && !isCerrada && (
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
-            <dt className="text-xs font-medium uppercase text-zinc-500">
+            <dt className="text-xs font-medium text-zinc-500 uppercase">
               Problema (causa raíz)
             </dt>
             <dd className="mt-1">
               <select
                 value={incidencia.problema_id ?? ''}
                 onChange={(e) =>
-                  handleLinkProblema(e.target.value ? Number(e.target.value) : null)
+                  handleLinkProblema(
+                    e.target.value ? Number(e.target.value) : null,
+                  )
                 }
                 className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
               >
@@ -500,30 +617,38 @@ export default function IncidenciaDetailPage() {
         </h2>
 
         {/* Vista solo-lectura, salvo que el técnico deba registrar el mantenimiento */}
-        {(!canRegistrarMantenimiento || hasMantenimiento) ? (
+        {!canRegistrarMantenimiento || hasMantenimiento ? (
           <div className="space-y-4">
             {mto ? (
               <>
                 <div>
-                  <dt className="text-xs font-medium uppercase text-zinc-500">Diagnostico</dt>
-                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                  <dt className="text-xs font-medium text-zinc-500 uppercase">
+                    Diagnostico
+                  </dt>
+                  <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                     {mto.diagnostico || '—'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium uppercase text-zinc-500">Acciones Realizadas</dt>
-                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                  <dt className="text-xs font-medium text-zinc-500 uppercase">
+                    Acciones Realizadas
+                  </dt>
+                  <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                     {mto.acciones_realizadas || '—'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium uppercase text-zinc-500">Conclusion</dt>
-                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap">
+                  <dt className="text-xs font-medium text-zinc-500 uppercase">
+                    Conclusion
+                  </dt>
+                  <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
                     {mto.conclusion || '—'}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium uppercase text-zinc-500">Fecha de Ejecucion</dt>
+                  <dt className="text-xs font-medium text-zinc-500 uppercase">
+                    Fecha de Ejecucion
+                  </dt>
                   <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
                     {mto.fecha_ejecucion
                       ? new Date(mto.fecha_ejecucion).toLocaleDateString()
@@ -531,14 +656,18 @@ export default function IncidenciaDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium uppercase text-zinc-500">Repuestos</dt>
+                  <dt className="text-xs font-medium text-zinc-500 uppercase">
+                    Repuestos
+                  </dt>
                   <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
                     {mto.repuestos && mto.repuestos.length > 0 ? (
-                      <ul className="list-disc pl-5 space-y-0.5">
+                      <ul className="list-disc space-y-0.5 pl-5">
                         {mto.repuestos.map((r) => (
                           <li key={r.id}>
                             {r.nombre}{' '}
-                            <span className="text-xs text-zinc-400">({r.categoria})</span>
+                            <span className="text-xs text-zinc-400">
+                              ({r.categoria})
+                            </span>
                           </li>
                         ))}
                       </ul>
@@ -548,10 +677,12 @@ export default function IncidenciaDetailPage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs font-medium uppercase text-zinc-500">Adjuntos (fotos)</dt>
+                  <dt className="text-xs font-medium text-zinc-500 uppercase">
+                    Adjuntos (fotos)
+                  </dt>
                   <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
                     {mto.adjuntos && mto.adjuntos.length > 0 ? (
-                      <ul className="list-disc pl-5 space-y-0.5">
+                      <ul className="list-disc space-y-0.5 pl-5">
                         {mto.adjuntos.map((a) => (
                           <li key={a.id}>
                             <a
@@ -628,7 +759,7 @@ export default function IncidenciaDetailPage() {
                 type="date"
                 value={new Date().toISOString().split('T')[0]}
                 readOnly
-                className="w-full rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm cursor-not-allowed dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                className="w-full cursor-not-allowed rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
               />
             </div>
 
@@ -645,20 +776,22 @@ export default function IncidenciaDetailPage() {
                 {selectedRepuestoIds.length === 0
                   ? 'Seleccionar repuestos...'
                   : `${selectedRepuestoIds.length} repuesto${selectedRepuestoIds.length > 1 ? 's' : ''} seleccionado${selectedRepuestoIds.length > 1 ? 's' : ''}`}
-                <span className="float-right">{repuestosOpen ? '\u25B2' : '\u25BC'}</span>
+                <span className="float-right">
+                  {repuestosOpen ? '\u25B2' : '\u25BC'}
+                </span>
               </button>
 
               {repuestosOpen && (
                 <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-zinc-300 bg-white shadow-lg dark:border-zinc-600 dark:bg-zinc-800">
                   {Object.entries(repuestosByCategoria).map(([cat, items]) => (
                     <div key={cat}>
-                      <div className="sticky top-0 bg-zinc-100 px-3 py-1.5 text-xs font-bold uppercase text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300">
+                      <div className="sticky top-0 bg-zinc-100 px-3 py-1.5 text-xs font-bold text-zinc-600 uppercase dark:bg-zinc-700 dark:text-zinc-300">
                         {cat}
                       </div>
                       {items.map((r) => (
                         <label
                           key={r.id}
-                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:hover:bg-zinc-700 dark:text-zinc-200"
+                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
                         >
                           <input
                             type="checkbox"
@@ -672,7 +805,9 @@ export default function IncidenciaDetailPage() {
                     </div>
                   ))}
                   {repuestos.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-zinc-400">No hay repuestos disponibles</div>
+                    <div className="px-3 py-2 text-sm text-zinc-400">
+                      No hay repuestos disponibles
+                    </div>
                   )}
                 </div>
               )}
@@ -690,14 +825,18 @@ export default function IncidenciaDetailPage() {
                       type="text"
                       placeholder="Nombre del archivo"
                       value={a.filename}
-                      onChange={(e) => updateAdjunto(i, 'filename', e.target.value)}
+                      onChange={(e) =>
+                        updateAdjunto(i, 'filename', e.target.value)
+                      }
                       className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                     />
                     <input
                       type="text"
                       placeholder="URL del archivo"
                       value={a.file_url}
-                      onChange={(e) => updateAdjunto(i, 'file_url', e.target.value)}
+                      onChange={(e) =>
+                        updateAdjunto(i, 'file_url', e.target.value)
+                      }
                       className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
                     />
                     <button
@@ -734,7 +873,9 @@ export default function IncidenciaDetailPage() {
           </button>
         )}
         {saveMsg && (
-          <span className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}>
+          <span
+            className={`text-sm ${saveMsg.isError ? 'text-red-500' : 'text-green-600'}`}
+          >
             {saveMsg.text}
           </span>
         )}
