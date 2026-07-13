@@ -381,3 +381,53 @@ class TestReincidentes:
         assert data["abiertos"] == 1  # solo A (abierto); B está cerrado
         assert data["por_estado"]["abierto"] == 1
         assert data["por_estado"]["cerrado"] == 1
+
+
+# --- Router problemas: listado + 404s ----------------------------------------
+
+class TestProblemasRouter:
+    """Cobertura de list_problemas y ramas 404 del router de problemas."""
+
+    def test_list_problemas_devuelve_todos(self, client):
+        client.post("/api/v1/problemas", json={"titulo": "A", "device_id": "T101"})
+        client.post("/api/v1/problemas", json={"titulo": "B", "device_id": "T102"})
+
+        r = client.get("/api/v1/problemas")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["total"] == 2
+        titulos = {p["titulo"] for p in body["items"]}
+        assert titulos == {"A", "B"}
+
+    def test_list_problemas_filtra_por_estado_y_device(self, client):
+        client.post("/api/v1/problemas", json={"titulo": "A", "device_id": "T101"})
+        p2 = client.post(
+            "/api/v1/problemas", json={"titulo": "B", "device_id": "T102"},
+        ).json()
+        client.put(f"/api/v1/problemas/{p2['id']}", json={"estado": "cerrado"})
+
+        r = client.get("/api/v1/problemas?estado=abierto")
+        assert r.status_code == 200
+        assert {p["titulo"] for p in r.json()["items"]} == {"A"}
+
+        r = client.get("/api/v1/problemas?device_id=T102")
+        assert r.status_code == 200
+        assert {p["titulo"] for p in r.json()["items"]} == {"B"}
+
+    def test_get_problema_inexistente_devuelve_404(self, client):
+        r = client.get("/api/v1/problemas/99999")
+        assert r.status_code == 404
+        assert r.json()["detail"] == "Problema no encontrado"
+
+    def test_get_incidencias_de_problema_inexistente_devuelve_404(self, client):
+        r = client.get("/api/v1/problemas/99999/incidencias")
+        assert r.status_code == 404
+        assert r.json()["detail"] == "Problema no encontrado"
+
+    def test_update_problema_inexistente_devuelve_404(self, client):
+        r = client.put(
+            "/api/v1/problemas/99999",
+            json={"estado": "cerrado"},
+        )
+        assert r.status_code == 404
+        assert r.json()["detail"] == "Problema no encontrado"
