@@ -1,11 +1,17 @@
 from unittest.mock import AsyncMock, patch, MagicMock
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.main import app
 from app.auth.jwt_handler import create_access_token
-from app.auth.rbac import is_public_route, check_write_permission, check_read_permission
+from app.auth.rbac import (
+    is_public_route,
+    check_write_permission,
+    check_read_permission,
+    require_roles,
+)
 
 
 @pytest.fixture
@@ -350,3 +356,61 @@ def test_admin_can_confirmar_equipo():
 def test_tecnico_cannot_confirmar_equipo():
     assert check_write_permission(
         "/api/v1/iot/equipos/T500/confirmar", "POST", "tecnico") is False
+
+
+# ---- require_roles dependency ----
+
+
+@pytest.mark.asyncio
+async def test_require_roles_allows_when_user_has_role():
+    dep = require_roles("administrador", "coordinador")
+    result = await dep(user={"rol": "administrador"})
+    assert result == {"rol": "administrador"}
+
+
+@pytest.mark.asyncio
+async def test_require_roles_rejects_when_user_lacks_role():
+    dep = require_roles("administrador")
+    with pytest.raises(HTTPException) as exc_info:
+        await dep(user={"rol": "tecnico"})
+    assert exc_info.value.status_code == 403
+    assert "permisos" in exc_info.value.detail.lower()
+
+
+@pytest.mark.asyncio
+async def test_require_roles_multi_role_grants_second():
+    dep = require_roles("administrador", "tecnico")
+    result = await dep(user={"rol": "tecnico"})
+    assert result["rol"] == "tecnico"
+
+
+# ---- check_write_permission fallthrough branches ----
+
+
+def test_write_exception_methods_restriction_skips_when_method_mismatch():
+    # POST sobre /api/v1/calibraciones/5 no cae en la excepción PUT-only,
+    # y la restricción base (coordinador+admin) sí aplica.
+    assert (
+        check_write_permission("/api/v1/calibraciones/5", "POST", "tecnico") is False
+    )
+
+
+def test_write_exception_methods_restriction_skips_but_general_rule_still_applies():
+    # Excepción /confirmar es POST-only. Un método DELETE cae al recorrido
+    # normal por WRITE_RESTRICTED — la ruta base /api/v1/iot/equipos NO está
+    # en WRITE_RESTRICTED (usa /api/v1/equipos), así que devuelve True.
+    assert check_write_permission(
+        "/api/v1/iot/equipos/T500/confirmar", "DELETE", "tecnico"
+    ) is True
+
+
+def test_write_permission_unknown_path_defaults_allow():
+    # Ruta que no coincide con ninguna excepción ni prefijo restringido -> True
+    assert check_write_permission(
+        "/api/v1/ruta/sin/restricciones", "POST", "tecnico"
+    ) is True
+
+
+def test_write_permission_head_and_options_always_allowed():
+    assert check_write_permission("/api/v1/usuarios", "HEAD", "tecnico") is True
+    assert check_write_permission("/api/v1/usuarios", "OPTIONS", "tecnico") is True

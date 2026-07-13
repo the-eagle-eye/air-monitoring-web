@@ -144,3 +144,127 @@ def test_get_no_transmission(db_session):
 ])
 def test_severity_fronteras(gap, expected):
     assert wd._severity_for_gap(gap) == expected
+
+
+# --- noop: ya estaba marcado con misma severidad (línea 139) ---
+def test_ya_marcado_misma_severidad_no_reescribe(db_session, patch_iot_ops):
+    # gap "media" (2h) y ya venía marcado como media -> _mark_loss False -> noop
+    _seed_state(db_session, "DEV1", NOW - timedelta(hours=2),
+                transmission_state="SIN_TRANSMISION", severity="media")
+    out = wd.run_watchdog(db_session, now=NOW)
+    st = db_session.get(HealthDeviceState, "DEV1")
+    assert st.transmission_state == "SIN_TRANSMISION"
+    assert st.transmission_severity == "media"
+    # no entra ni en 'marked' ni en 'cleared'
+    assert out["marked"] == []
+    assert out["cleared"] == []
+
+
+# --- ya marcado y cambia severidad: sí re-escribe (marked) ---
+def test_ya_marcado_cambia_severidad(db_session, patch_iot_ops):
+    _seed_state(db_session, "DEV1", NOW - timedelta(hours=30),
+                transmission_state="SIN_TRANSMISION", severity="media")
+    out = wd.run_watchdog(db_session, now=NOW)
+    st = db_session.get(HealthDeviceState, "DEV1")
+    assert st.transmission_severity == "alta"
+    assert any(m["device_id"] == "DEV1" for m in out["marked"])
+
+
+# --- _list_active_devices ---
+class _FakeHttpResp:
+    def __init__(self, payload, status_code=200, raise_exc=None):
+        self._payload = payload
+        self.status_code = status_code
+        self._raise = raise_exc
+
+    def raise_for_status(self):
+        if self._raise:
+            raise self._raise
+        if self.status_code >= 400:
+            raise RuntimeError(f"http {self.status_code}")
+
+    def json(self):
+        return self._payload
+
+
+def test_list_active_devices_desde_lista(monkeypatch):
+    payload = [
+        {"device_id": "T101", "estado": "activo"},
+        {"device_id": "T102", "estado": "inactivo"},   # descartar
+        {"device_id": "T103"},                          # default 'activo'
+        {"estado": "activo"},                           # sin device_id -> descartar
+    ]
+
+    def _fake_get(url, timeout=None):
+        assert "/api/v1/iot/equipos" in url
+        return _FakeHttpResp(payload)
+
+    monkeypatch.setattr(wd.httpx, "get", _fake_get)
+    assert wd._list_active_devices("http://iot") == ["T101", "T103"]
+
+
+def test_list_active_devices_desde_dict_items(monkeypatch):
+    payload = {"items": [{"device_id": "T101", "estado": "activo"}]}
+
+    monkeypatch.setattr(
+        wd.httpx, "get", lambda url, timeout=None: _FakeHttpResp(payload)
+    )
+    assert wd._list_active_devices("http://iot") == ["T101"]
+
+
+def test_list_active_devices_error_devuelve_lista_vacia(monkeypatch):
+    def _boom(url, timeout=None):
+        raise RuntimeError("iot caido")
+
+    monkeypatch.setattr(wd.httpx, "get", _boom)
+    assert wd._list_active_devices("http://iot") == []
+
+
+def test_list_active_devices_http_500_devuelve_lista_vacia(monkeypatch):
+    monkeypatch.setattr(
+        wd.httpx, "get",
+        lambda url, timeout=None: _FakeHttpResp({}, status_code=500),
+    )
+    assert wd._list_active_devices("http://iot") == []
+
+
+# --- _has_open_incidencia ---
+def test_has_open_incidencia_true(monkeypatch):
+    payload = {
+        "items": [
+            {"estado": "finalizado"},
+            {"estado": "en_ejecucion"},
+        ]
+    }
+    monkeypatch.setattr(
+        wd.httpx, "get",
+        lambda url, params=None, timeout=None: _FakeHttpResp(payload),
+    )
+    assert wd._has_open_incidencia("http://ops", "T101") is True
+
+
+def test_has_open_incidencia_false_todas_cerradas(monkeypatch):
+    payload = {"items": [{"estado": "finalizado"}, {"estado": "cancelado"}]}
+    monkeypatch.setattr(
+        wd.httpx, "get",
+        lambda url, params=None, timeout=None: _FakeHttpResp(payload),
+    )
+    assert wd._has_open_incidencia("http://ops", "T101") is False
+
+
+def test_has_open_incidencia_error_devuelve_false(monkeypatch):
+    def _boom(url, params=None, timeout=None):
+        raise RuntimeError("ops caido")
+    monkeypatch.setattr(wd.httpx, "get", _boom)
+    # ante duda, NO silenciar (mejor alertar de más que de menos)
+    assert wd._has_open_incidencia("http://ops", "T101") is False
+
+
+def test_has_open_incidencia_estado_resuelto_es_abierto(monkeypatch):
+    # 'resuelto' aún cuenta como abierto en el flujo ITIL
+    payload = {"items": [{"estado": "resuelto"}]}
+    monkeypatch.setattr(
+        wd.httpx, "get",
+        lambda url, params=None, timeout=None: _FakeHttpResp(payload),
+    )
+    assert wd._has_open_incidencia("http://ops", "T101") is True
