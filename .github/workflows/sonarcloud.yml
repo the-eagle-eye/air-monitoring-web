@@ -1,0 +1,70 @@
+name: SonarCloud
+
+on:
+  push:
+    branches: [main, dev, qa]
+  pull_request:
+    branches: [main, dev, qa]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: airmon
+          POSTGRES_PASSWORD: airmon123
+          POSTGRES_DB: airmonitoring
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # SonarCloud needs full history for blame/new-code analysis
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Backend coverage (all 4 services)
+        env:
+          DATABASE_URL: postgresql://airmon:airmon123@localhost:5432/airmonitoring
+        run: |
+          set -e
+          for svc in api-gateway iot-service ml-service ops-service; do
+            echo "::group::Coverage $svc"
+            cd "services/$svc"
+            pip install -r requirements-dev.txt
+            PYTHONPATH="${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}/services/$svc" \
+              pytest --cov=app --cov-report=xml --cov-report=term
+            cd "${GITHUB_WORKSPACE}"
+            echo "::endgroup::"
+          done
+
+      - name: Frontend coverage
+        run: |
+          cd frontend
+          npm ci
+          npm test -- --coverage
+
+      - name: SonarCloud scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
