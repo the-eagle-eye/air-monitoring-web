@@ -13,6 +13,9 @@ from app.services import problema_service
 
 router = APIRouter()
 
+_NOT_FOUND = "Problema no encontrado"
+_NOT_FOUND_RESPONSE = {404: {"description": _NOT_FOUND}}
+
 
 @router.get("", response_model=ProblemaListResponse)
 def list_problemas(
@@ -53,28 +56,40 @@ def resumen(db: Session = Depends(get_db)):
     return problema_service.problemas_resumen(db)
 
 
-@router.get("/{problema_id}", response_model=ProblemaResponse)
+@router.get(
+    "/{problema_id}",
+    response_model=ProblemaResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_problema(problema_id: int, db: Session = Depends(get_db)):
     problema = problema_service.get_problema(db, problema_id)
     if not problema:
-        raise HTTPException(status_code=404, detail="Problema no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return ProblemaResponse.model_validate(problema)
 
 
-@router.get("/{problema_id}/incidencias", response_model=list[IncidenciaResponse])
+@router.get(
+    "/{problema_id}/incidencias",
+    response_model=list[IncidenciaResponse],
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_incidencias(problema_id: int, db: Session = Depends(get_db)):
     if problema_service.get_problema(db, problema_id) is None:
-        raise HTTPException(status_code=404, detail="Problema no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return [
         IncidenciaResponse.model_validate(i)
         for i in problema_service.get_incidencias_of_problema(db, problema_id)
     ]
 
 
-@router.put("/{problema_id}", response_model=ProblemaResponse)
+@router.put(
+    "/{problema_id}",
+    response_model=ProblemaResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def update_problema(problema_id: int, data: ProblemaUpdate,
                     db: Session = Depends(get_db)):
     problema = problema_service.update_problema(db, problema_id, data)
     if not problema:
-        raise HTTPException(status_code=404, detail="Problema no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return ProblemaResponse.model_validate(problema)

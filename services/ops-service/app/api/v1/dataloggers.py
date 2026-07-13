@@ -13,6 +13,10 @@ from app.schemas.datalogger import (
 
 router = APIRouter()
 
+_NOT_FOUND = "Datalogger no encontrado"
+_NOT_FOUND_RESPONSE = {404: {"description": _NOT_FOUND}}
+_CONFLICT_RESPONSE = {409: {"description": "Codigo interno ya existe"}}
+
 
 @router.get("", response_model=list[DataloggerResponse])
 def list_dataloggers(db: Session = Depends(get_db)):
@@ -20,7 +24,12 @@ def list_dataloggers(db: Session = Depends(get_db)):
     return [DataloggerResponse.model_validate(d) for d in items]
 
 
-@router.post("", response_model=DataloggerResponse, status_code=201)
+@router.post(
+    "",
+    response_model=DataloggerResponse,
+    status_code=201,
+    responses=_CONFLICT_RESPONSE,
+)
 def create_datalogger(data: DataloggerCreate, db: Session = Depends(get_db)):
     existing = (
         db.query(Datalogger)
@@ -39,21 +48,29 @@ def create_datalogger(data: DataloggerCreate, db: Session = Depends(get_db)):
     return DataloggerResponse.model_validate(dl)
 
 
-@router.get("/{datalogger_id}", response_model=DataloggerResponse)
+@router.get(
+    "/{datalogger_id}",
+    response_model=DataloggerResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_datalogger(datalogger_id: int, db: Session = Depends(get_db)):
     dl = db.query(Datalogger).filter(Datalogger.id == datalogger_id).first()
     if not dl:
-        raise HTTPException(status_code=404, detail="Datalogger no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return DataloggerResponse.model_validate(dl)
 
 
-@router.put("/{datalogger_id}", response_model=DataloggerResponse)
+@router.put(
+    "/{datalogger_id}",
+    response_model=DataloggerResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def update_datalogger(
     datalogger_id: int, data: DataloggerUpdate, db: Session = Depends(get_db)
 ):
     dl = db.query(Datalogger).filter(Datalogger.id == datalogger_id).first()
     if not dl:
-        raise HTTPException(status_code=404, detail="Datalogger no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
     update_fields = data.model_dump(exclude_unset=True)
     for field, value in update_fields.items():

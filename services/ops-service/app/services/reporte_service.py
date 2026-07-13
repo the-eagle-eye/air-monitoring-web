@@ -52,15 +52,8 @@ def _fetch_equipos_map(iot_service_url: str) -> dict[str, dict]:
         return {}
 
 
-def get_reporte_mantenimiento(
-    db: Session,
-    fecha_inicio: date | None = None,
-    fecha_fin: date | None = None,
-    device_id: str | None = None,
-    tipo: str | None = None,
-    iot_service_url: str = "",
-) -> list[dict]:
-    query = (
+def _base_query(db: Session):
+    return (
         db.query(Incidencia)
         .outerjoin(Incidencia.mantenimiento_correctivo)
         .outerjoin(Incidencia.calibracion)
@@ -75,89 +68,95 @@ def get_reporte_mantenimiento(
         )
     )
 
+
+def _apply_filters(
+    query,
+    fecha_inicio: date | None,
+    fecha_fin: date | None,
+    device_id: str | None,
+    tipo: str | None,
+):
     if fecha_inicio:
         start_dt = datetime(
             fecha_inicio.year, fecha_inicio.month, fecha_inicio.day,
             tzinfo=timezone.utc,
         )
         query = query.filter(Incidencia.created_at >= start_dt)
-
     if fecha_fin:
         end_dt = datetime(
             fecha_fin.year, fecha_fin.month, fecha_fin.day,
             23, 59, 59, tzinfo=timezone.utc,
         )
         query = query.filter(Incidencia.created_at <= end_dt)
-
     if device_id:
         query = query.filter(Incidencia.device_id == device_id)
-
     if tipo:
         query = query.filter(Incidencia.tipo == tipo)
+    return query
 
-    query = query.order_by(Incidencia.created_at.desc())
+
+def _responsable_nombre(inc: Incidencia) -> str:
+    if not inc.responsable:
+        return ""
+    return f"{inc.responsable.nombre} {inc.responsable.apellido}"
+
+
+def _repuestos_str(mant: MantenimientoCorrectivo | None) -> str:
+    if not mant or not mant.repuestos_usados:
+        return ""
+    return ", ".join(
+        mr.repuesto.nombre for mr in mant.repuestos_usados if mr.repuesto
+    )
+
+
+def _iso(dt: datetime | None) -> str:
+    return dt.isoformat() if dt else ""
+
+
+def _incidencia_to_row(inc: Incidencia, equipo: dict) -> dict:
+    mant = inc.mantenimiento_correctivo
+    cal = inc.calibracion
+    return {
+        "id_incidencia": inc.id,
+        "device_id": inc.device_id,
+        "equipo_nombre": equipo.get("nombre", ""),
+        "ubicacion": equipo.get("ubicacion", ""),
+        "modelo": equipo.get("modelo", ""),
+        "marca": equipo.get("marca", ""),
+        "tipo": inc.tipo,
+        "estado": inc.estado,
+        "prioridad": inc.prioridad,
+        "descripcion": inc.descripcion or "",
+        "responsable": _responsable_nombre(inc),
+        "fecha_creacion": _iso(inc.created_at),
+        "fecha_actualizacion": _iso(inc.updated_at),
+        "diagnostico": mant.diagnostico if mant else "",
+        "acciones_realizadas": mant.acciones_realizadas if mant else "",
+        "conclusion": mant.conclusion if mant else "",
+        "fecha_ejecucion": _iso(mant.fecha_ejecucion) if mant else "",
+        "repuestos_usados": _repuestos_str(mant),
+        "fecha_calibracion": _iso(cal.fecha_calibracion) if cal else "",
+        "proveedor": cal.proveedor.nombre if cal and cal.proveedor else "",
+        "certificado_url": cal.certificado_url if cal else "",
+        "nota_calibracion": cal.nota if cal else "",
+    }
+
+
+def get_reporte_mantenimiento(
+    db: Session,
+    fecha_inicio: date | None = None,
+    fecha_fin: date | None = None,
+    device_id: str | None = None,
+    tipo: str | None = None,
+    iot_service_url: str = "",
+) -> list[dict]:
+    query = _apply_filters(
+        _base_query(db), fecha_inicio, fecha_fin, device_id, tipo
+    ).order_by(Incidencia.created_at.desc())
     incidencias = query.all()
 
-    # Enrich with equipment data
-    equipos_map: dict[str, dict] = {}
-    if iot_service_url:
-        equipos_map = _fetch_equipos_map(iot_service_url)
-
-    rows: list[dict] = []
-    for inc in incidencias:
-        equipo = equipos_map.get(inc.device_id, {})
-        mant = inc.mantenimiento_correctivo
-        cal = inc.calibracion
-        resp_nombre = ""
-        if inc.responsable:
-            resp_nombre = f"{inc.responsable.nombre} {inc.responsable.apellido}"
-
-        repuestos_str = ""
-        if mant and mant.repuestos_usados:
-            repuestos_str = ", ".join(
-                mr.repuesto.nombre for mr in mant.repuestos_usados if mr.repuesto
-            )
-
-        proveedor_nombre = ""
-        if cal and cal.proveedor:
-            proveedor_nombre = cal.proveedor.nombre
-
-        row = {
-            "id_incidencia": inc.id,
-            "device_id": inc.device_id,
-            "equipo_nombre": equipo.get("nombre", ""),
-            "ubicacion": equipo.get("ubicacion", ""),
-            "modelo": equipo.get("modelo", ""),
-            "marca": equipo.get("marca", ""),
-            "tipo": inc.tipo,
-            "estado": inc.estado,
-            "prioridad": inc.prioridad,
-            "descripcion": inc.descripcion or "",
-            "responsable": resp_nombre,
-            "fecha_creacion": (
-                inc.created_at.isoformat() if inc.created_at else ""
-            ),
-            "fecha_actualizacion": (
-                inc.updated_at.isoformat() if inc.updated_at else ""
-            ),
-            "diagnostico": mant.diagnostico if mant else "",
-            "acciones_realizadas": mant.acciones_realizadas if mant else "",
-            "conclusion": mant.conclusion if mant else "",
-            "fecha_ejecucion": (
-                mant.fecha_ejecucion.isoformat()
-                if mant and mant.fecha_ejecucion
-                else ""
-            ),
-            "repuestos_usados": repuestos_str,
-            "fecha_calibracion": (
-                cal.fecha_calibracion.isoformat()
-                if cal and cal.fecha_calibracion
-                else ""
-            ),
-            "proveedor": proveedor_nombre,
-            "certificado_url": cal.certificado_url if cal else "",
-            "nota_calibracion": cal.nota if cal else "",
-        }
-        rows.append(row)
-
-    return rows
+    equipos_map = _fetch_equipos_map(iot_service_url) if iot_service_url else {}
+    return [
+        _incidencia_to_row(inc, equipos_map.get(inc.device_id, {}))
+        for inc in incidencias
+    ]

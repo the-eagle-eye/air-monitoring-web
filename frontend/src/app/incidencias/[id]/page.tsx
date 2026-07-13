@@ -29,6 +29,512 @@ function fmtDate(iso: string | null | undefined): string {
   });
 }
 
+// Pre-selecciona el responsable en el selector SOLO si es un técnico activo
+// (los que aparecen en la lista); si no, deja el placeholder para forzar elección.
+function safeEditResponsable(
+  inc: { responsable_id: number | null },
+  users: Usuario[],
+): string {
+  const esTecnicoActivo = users.some(
+    (u) =>
+      u.id === inc.responsable_id &&
+      u.rol === 'tecnico' &&
+      u.estado === 'activo',
+  );
+  return esTecnicoActivo && inc.responsable_id
+    ? String(inc.responsable_id)
+    : '';
+}
+
+function prioridadVariant(p: string): 'danger' | 'warning' | 'success' {
+  if (p === 'alta') return 'danger';
+  if (p === 'media') return 'warning';
+  return 'success';
+}
+
+function capitalize(s: string | null | undefined, fallback = 'otro'): string {
+  return (s ?? fallback).replace(/^\w/, (c) => c.toUpperCase());
+}
+
+type HeaderActionsProps = {
+  incidencia: Incidencia;
+  canCerrar: boolean;
+  canCancelar: boolean;
+  saving: boolean;
+  onCerrar: () => void;
+  onCancelar: () => void;
+  onBack: () => void;
+};
+
+function HeaderActions({
+  incidencia,
+  canCerrar,
+  canCancelar,
+  saving,
+  onCerrar,
+  onCancelar,
+  onBack,
+}: HeaderActionsProps) {
+  return (
+    <div className="flex gap-2">
+      {canCerrar && (
+        <button
+          onClick={onCerrar}
+          disabled={saving}
+          className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+        >
+          Verificar y cerrar
+        </button>
+      )}
+      {canCancelar && (
+        <button
+          onClick={onCancelar}
+          disabled={saving}
+          className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400"
+        >
+          Cancelar
+        </button>
+      )}
+      {incidencia.problema_id && (
+        <Link
+          href={`/problemas/${incidencia.problema_id}`}
+          className="rounded-md border border-purple-300 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300"
+        >
+          Ver Problema #{incidencia.problema_id}
+        </Link>
+      )}
+      <Link
+        href={`/equipos/${incidencia.device_id}`}
+        className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+      >
+        Ver Equipo
+      </Link>
+      <button
+        onClick={onBack}
+        className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
+      >
+        Volver
+      </button>
+    </div>
+  );
+}
+
+type AsignarInlineProps = {
+  usuarios: Usuario[];
+  responsable: Usuario | undefined;
+  editResponsable: string;
+  yaAsignada: boolean;
+  saving: boolean;
+  onEditResponsable: (v: string) => void;
+  onAsignar: () => void;
+};
+
+function AsignarResponsableInline({
+  usuarios,
+  responsable,
+  editResponsable,
+  yaAsignada,
+  saving,
+  onEditResponsable,
+  onAsignar,
+}: AsignarInlineProps) {
+  const tecnicos = usuarios.filter(
+    (u) => u.rol === 'tecnico' && u.estado === 'activo',
+  );
+  return (
+    <div className="flex flex-col gap-1">
+      {yaAsignada && (
+        <span className="text-xs text-zinc-500 dark:text-zinc-400">
+          Asignada a:{' '}
+          <span className="font-medium text-zinc-700 dark:text-zinc-300">
+            {responsable
+              ? `${responsable.nombre} ${responsable.apellido}`
+              : '—'}
+          </span>
+        </span>
+      )}
+      <div className="flex items-center gap-2">
+        <select
+          value={editResponsable}
+          onChange={(e) => onEditResponsable(e.target.value)}
+          className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+        >
+          <option value="" disabled>
+            Seleccionar técnico
+          </option>
+          {tecnicos.map((u) => (
+            <option key={u.id} value={u.id}>
+              {u.nombre} {u.apellido}
+            </option>
+          ))}
+        </select>
+        <button
+          onClick={onAsignar}
+          disabled={saving || !editResponsable}
+          className="rounded-md bg-blue-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {yaAsignada ? 'Re-asignar' : 'Asignar'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+type MantenimientoData = NonNullable<Incidencia['mantenimiento_correctivo']>;
+
+function MantenimientoView({
+  mto,
+}: {
+  mto: MantenimientoData | null | undefined;
+}) {
+  if (!mto) {
+    return (
+      <p className="text-sm text-zinc-400">
+        No se ha registrado mantenimiento correctivo aun.
+      </p>
+    );
+  }
+
+  const fechaEjecucion = mto.fecha_ejecucion
+    ? new Date(mto.fecha_ejecucion).toLocaleDateString()
+    : '—';
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <dt className="text-xs font-medium text-zinc-500 uppercase">
+          Diagnostico
+        </dt>
+        <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+          {mto.diagnostico || '—'}
+        </dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium text-zinc-500 uppercase">
+          Acciones Realizadas
+        </dt>
+        <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+          {mto.acciones_realizadas || '—'}
+        </dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium text-zinc-500 uppercase">
+          Conclusion
+        </dt>
+        <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
+          {mto.conclusion || '—'}
+        </dd>
+      </div>
+      <div>
+        <dt className="text-xs font-medium text-zinc-500 uppercase">
+          Fecha de Ejecucion
+        </dt>
+        <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+          {fechaEjecucion}
+        </dd>
+      </div>
+      <MantenimientoRepuestos repuestos={mto.repuestos} />
+      <MantenimientoAdjuntos adjuntos={mto.adjuntos} />
+    </div>
+  );
+}
+
+function MantenimientoRepuestos({
+  repuestos,
+}: {
+  repuestos: MantenimientoData['repuestos'];
+}) {
+  const hasItems = repuestos && repuestos.length > 0;
+  return (
+    <div>
+      <dt className="text-xs font-medium text-zinc-500 uppercase">Repuestos</dt>
+      <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+        {hasItems ? (
+          <ul className="list-disc space-y-0.5 pl-5">
+            {repuestos!.map((r) => (
+              <li key={r.id}>
+                {r.nombre}{' '}
+                <span className="text-xs text-zinc-400">({r.categoria})</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          '—'
+        )}
+      </dd>
+    </div>
+  );
+}
+
+function MantenimientoAdjuntos({
+  adjuntos,
+}: {
+  adjuntos: MantenimientoData['adjuntos'];
+}) {
+  const hasItems = adjuntos && adjuntos.length > 0;
+  return (
+    <div>
+      <dt className="text-xs font-medium text-zinc-500 uppercase">
+        Adjuntos (fotos)
+      </dt>
+      <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
+        {hasItems ? (
+          <ul className="list-disc space-y-0.5 pl-5">
+            {adjuntos!.map((a) => (
+              <li key={a.id}>
+                <a
+                  href={a.file_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:underline dark:text-blue-400"
+                >
+                  {a.filename}
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          '—'
+        )}
+      </dd>
+    </div>
+  );
+}
+
+type RepuestosMultiSelectProps = {
+  repuestos: Repuesto[];
+  selectedRepuestoIds: number[];
+  open: boolean;
+  setOpen: (fn: (prev: boolean) => boolean) => void;
+  toggleRepuesto: (id: number) => void;
+  containerRef: React.RefObject<HTMLDivElement | null>;
+};
+
+function RepuestosMultiSelect({
+  repuestos,
+  selectedRepuestoIds,
+  open,
+  setOpen,
+  toggleRepuesto,
+  containerRef,
+}: RepuestosMultiSelectProps) {
+  const repuestosByCategoria = repuestos.reduce<Record<string, Repuesto[]>>(
+    (acc, r) => {
+      if (!acc[r.categoria]) acc[r.categoria] = [];
+      acc[r.categoria].push(r);
+      return acc;
+    },
+    {},
+  );
+  const count = selectedRepuestoIds.length;
+  const label =
+    count === 0
+      ? 'Seleccionar repuestos...'
+      : `${count} repuesto${count > 1 ? 's' : ''} seleccionado${count > 1 ? 's' : ''}`;
+
+  return (
+    <div ref={containerRef} className="relative">
+      <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        Repuestos
+      </label>
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="w-full rounded-md border border-zinc-300 px-3 py-2 text-left text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+      >
+        {label}
+        <span className="float-right">{open ? '▲' : '▼'}</span>
+      </button>
+
+      {open && (
+        <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-zinc-300 bg-white shadow-lg dark:border-zinc-600 dark:bg-zinc-800">
+          {Object.entries(repuestosByCategoria).map(([cat, items]) => (
+            <div key={cat}>
+              <div className="sticky top-0 bg-zinc-100 px-3 py-1.5 text-xs font-bold text-zinc-600 uppercase dark:bg-zinc-700 dark:text-zinc-300">
+                {cat}
+              </div>
+              {items.map((r) => (
+                <label
+                  key={r.id}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedRepuestoIds.includes(r.id)}
+                    onChange={() => toggleRepuesto(r.id)}
+                    className="rounded border-zinc-300 dark:border-zinc-500"
+                  />
+                  {r.nombre}
+                </label>
+              ))}
+            </div>
+          ))}
+          {repuestos.length === 0 && (
+            <div className="px-3 py-2 text-sm text-zinc-400">
+              No hay repuestos disponibles
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type Adjunto = { filename: string; file_url: string };
+
+type AdjuntosEditorProps = {
+  adjuntos: Adjunto[];
+  onAdd: () => void;
+  onUpdate: (
+    index: number,
+    field: 'filename' | 'file_url',
+    value: string,
+  ) => void;
+  onRemove: (index: number) => void;
+};
+
+function AdjuntosEditor({
+  adjuntos,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: AdjuntosEditorProps) {
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+        Adjuntos (fotos)
+      </label>
+      <div className="space-y-2">
+        {adjuntos.map((a, i) => (
+          <div key={i} className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="Nombre del archivo"
+              value={a.filename}
+              onChange={(e) => onUpdate(i, 'filename', e.target.value)}
+              className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+            />
+            <input
+              type="text"
+              placeholder="URL del archivo"
+              value={a.file_url}
+              onChange={(e) => onUpdate(i, 'file_url', e.target.value)}
+              className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+            />
+            <button
+              type="button"
+              onClick={() => onRemove(i)}
+              className="text-sm text-red-400 hover:text-red-300"
+            >
+              Eliminar
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        className="mt-2 rounded-md border border-dashed border-zinc-400 px-3 py-1.5 text-sm text-zinc-600 hover:border-zinc-500 hover:text-zinc-700 dark:border-zinc-500 dark:text-zinc-400 dark:hover:border-zinc-400 dark:hover:text-zinc-300"
+      >
+        + Agregar Adjunto
+      </button>
+    </div>
+  );
+}
+
+type MantenimientoFormProps = {
+  mtoDiagnostico: string;
+  mtoAcciones: string;
+  mtoConclusion: string;
+  onDiagnostico: (v: string) => void;
+  onAcciones: (v: string) => void;
+  onConclusion: (v: string) => void;
+  repuestos: Repuesto[];
+  selectedRepuestoIds: number[];
+  repuestosOpen: boolean;
+  setRepuestosOpen: (fn: (prev: boolean) => boolean) => void;
+  toggleRepuesto: (id: number) => void;
+  repuestosRef: React.RefObject<HTMLDivElement | null>;
+  adjuntos: Adjunto[];
+  addAdjunto: () => void;
+  updateAdjunto: (
+    index: number,
+    field: 'filename' | 'file_url',
+    value: string,
+  ) => void;
+  removeAdjunto: (index: number) => void;
+};
+
+function MantenimientoForm(props: MantenimientoFormProps) {
+  return (
+    <div className="space-y-4">
+      <div>
+        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Diagnostico <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          value={props.mtoDiagnostico}
+          onChange={(e) => props.onDiagnostico(e.target.value)}
+          rows={3}
+          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Acciones Realizadas <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          value={props.mtoAcciones}
+          onChange={(e) => props.onAcciones(e.target.value)}
+          rows={3}
+          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Conclusion <span className="text-red-500">*</span>
+        </label>
+        <textarea
+          value={props.mtoConclusion}
+          onChange={(e) => props.onConclusion(e.target.value)}
+          rows={2}
+          className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
+        />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Fecha de Ejecucion
+        </label>
+        <input
+          type="date"
+          value={new Date().toISOString().split('T')[0]}
+          readOnly
+          className="w-full cursor-not-allowed rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+        />
+      </div>
+
+      <RepuestosMultiSelect
+        repuestos={props.repuestos}
+        selectedRepuestoIds={props.selectedRepuestoIds}
+        open={props.repuestosOpen}
+        setOpen={props.setRepuestosOpen}
+        toggleRepuesto={props.toggleRepuesto}
+        containerRef={props.repuestosRef}
+      />
+
+      <AdjuntosEditor
+        adjuntos={props.adjuntos}
+        onAdd={props.addAdjunto}
+        onUpdate={props.updateAdjunto}
+        onRemove={props.removeAdjunto}
+      />
+    </div>
+  );
+}
+
 export default function IncidenciaDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -41,20 +547,15 @@ export default function IncidenciaDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Edit state
   const [editResponsable, setEditResponsable] = useState('');
 
-  // Mantenimiento form
   const [mtoDiagnostico, setMtoDiagnostico] = useState('');
   const [mtoAcciones, setMtoAcciones] = useState('');
   const [mtoConclusion, setMtoConclusion] = useState('');
   const [selectedRepuestoIds, setSelectedRepuestoIds] = useState<number[]>([]);
   const [repuestosOpen, setRepuestosOpen] = useState(false);
-  const [adjuntos, setAdjuntos] = useState<
-    { filename: string; file_url: string }[]
-  >([]);
+  const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
 
-  // Save state
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<{
     text: string;
@@ -67,18 +568,12 @@ export default function IncidenciaDetailPage() {
     Promise.all([fetchIncidencia(id), fetchUsuarios(), fetchRepuestos()])
       .then(([inc, users, reps]) => {
         setIncidencia(inc);
-        // Solo pre-seleccionar el responsable actual si es un TÉCNICO ACTIVO (los que
-        // aparecen en el selector). Si la incidencia está asignada a la coordinadora
-        // (auto-creada por el monitor) o a alguien fuera de la lista, el selector queda
-        // en "Seleccionar técnico" — si no, el navegador mostraría el primer técnico
-        // pero el value seguiría siendo el id ajeno y "Re-asignar" no cambiaría nada.
         setEditResponsable(safeEditResponsable(inc, users));
         setUsuarios(users);
         setRepuestos(reps);
         fetchProblemas()
           .then((r) => setProblemas(r.items))
           .catch(() => {});
-        // Pre-populate mantenimiento fields if data exists
         if (inc.mantenimiento_correctivo) {
           setMtoDiagnostico(inc.mantenimiento_correctivo.diagnostico ?? '');
           setMtoAcciones(
@@ -91,7 +586,6 @@ export default function IncidenciaDetailPage() {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Close repuestos dropdown on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (
@@ -105,22 +599,15 @@ export default function IncidenciaDetailPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  // Rol del usuario (flujo ITIL por rol)
   const { user } = useAuth();
   const rol = user?.rol ?? '';
   const isCoordinador = rol === 'coordinador' || rol === 'administrador';
   const isTecnico = rol === 'tecnico';
 
-  // Estado del ciclo de vida
   const estado = incidencia?.estado ?? '';
   const isCerrada = estado === 'finalizado' || estado === 'cancelado';
   const hasMantenimiento = !!incidencia?.mantenimiento_correctivo;
 
-  // Acciones disponibles por rol y estado (ITIL — estado avanza por acción):
-  //  - Coordinador ASIGNA (pendiente) -> en_ejecucion; y puede RE-ASIGNAR en
-  //    en_ejecucion (cambiar de técnico) sin cambiar el estado.
-  //  - Técnico completa MANTENIMIENTO (en_ejecucion) -> resuelto
-  //  - Coordinador VERIFICA Y CIERRA (resuelto) -> finalizado (+ calibración)
   const canAsignar =
     isCoordinador && (estado === 'pendiente' || estado === 'en_ejecucion');
   const yaAsignada = estado === 'en_ejecucion';
@@ -131,7 +618,19 @@ export default function IncidenciaDetailPage() {
   const canCerrar = isCoordinador && estado === 'resuelto';
   const canCancelar = isCoordinador && !isCerrada;
 
-  // Coordinador: asignar responsable (auto -> en_ejecucion en el backend)
+  async function refreshIncidencia() {
+    const refreshed = await fetchIncidencia(id);
+    setIncidencia(refreshed);
+    setEditResponsable(safeEditResponsable(refreshed, usuarios));
+    if (refreshed.mantenimiento_correctivo) {
+      setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
+      setMtoAcciones(
+        refreshed.mantenimiento_correctivo.acciones_realizadas ?? '',
+      );
+      setMtoConclusion(refreshed.mantenimiento_correctivo.conclusion ?? '');
+    }
+  }
+
   async function handleAsignar() {
     if (!incidencia) return;
     if (!editResponsable) {
@@ -161,7 +660,6 @@ export default function IncidenciaDetailPage() {
     }
   }
 
-  // Coordinador: verificar y cerrar (finalizado -> dispara calibración)
   async function handleCerrar() {
     setSaving(true);
     setSaveMsg(null);
@@ -203,7 +701,6 @@ export default function IncidenciaDetailPage() {
     }
   }
 
-  // Técnico: registrar mantenimiento (auto -> resuelto en el backend)
   async function handleSubmitMantenimiento() {
     if (
       !mtoDiagnostico.trim() ||
@@ -240,36 +737,6 @@ export default function IncidenciaDetailPage() {
       });
     } finally {
       setSaving(false);
-    }
-  }
-
-  // Pre-selecciona el responsable en el selector SOLO si es un técnico activo
-  // (los que aparecen en la lista); si no, deja el placeholder para forzar elección.
-  function safeEditResponsable(
-    inc: { responsable_id: number | null },
-    users: Usuario[],
-  ) {
-    const esTecnicoActivo = users.some(
-      (u) =>
-        u.id === inc.responsable_id &&
-        u.rol === 'tecnico' &&
-        u.estado === 'activo',
-    );
-    return esTecnicoActivo && inc.responsable_id
-      ? String(inc.responsable_id)
-      : '';
-  }
-
-  async function refreshIncidencia() {
-    const refreshed = await fetchIncidencia(id);
-    setIncidencia(refreshed);
-    setEditResponsable(safeEditResponsable(refreshed, usuarios));
-    if (refreshed.mantenimiento_correctivo) {
-      setMtoDiagnostico(refreshed.mantenimiento_correctivo.diagnostico ?? '');
-      setMtoAcciones(
-        refreshed.mantenimiento_correctivo.acciones_realizadas ?? '',
-      );
-      setMtoConclusion(refreshed.mantenimiento_correctivo.conclusion ?? '');
     }
   }
 
@@ -314,16 +781,6 @@ export default function IncidenciaDetailPage() {
     setAdjuntos((prev) => prev.filter((_, i) => i !== index));
   }
 
-  // Group repuestos by category
-  const repuestosByCategoria = repuestos.reduce<Record<string, Repuesto[]>>(
-    (acc, r) => {
-      if (!acc[r.categoria]) acc[r.categoria] = [];
-      acc[r.categoria].push(r);
-      return acc;
-    },
-    {},
-  );
-
   if (loading) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-12 text-center text-zinc-400">
@@ -344,10 +801,10 @@ export default function IncidenciaDetailPage() {
 
   const responsable = usuarios.find((u) => u.id === incidencia.responsable_id);
   const mto = incidencia.mantenimiento_correctivo;
+  const showMantenimientoView = !canRegistrarMantenimiento || hasMantenimiento;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
-      {/* Header */}
       <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">
@@ -355,51 +812,17 @@ export default function IncidenciaDetailPage() {
           </h1>
           <StatusBadge status={incidencia.estado} />
         </div>
-        <div className="flex gap-2">
-          {/* Coordinador: verificar y cerrar (resuelto -> finalizado + calibración) */}
-          {canCerrar && (
-            <button
-              onClick={handleCerrar}
-              disabled={saving}
-              className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-            >
-              Verificar y cerrar
-            </button>
-          )}
-          {/* Coordinador: cancelar (falso positivo) */}
-          {canCancelar && (
-            <button
-              onClick={handleCancelar}
-              disabled={saving}
-              className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-700 dark:text-red-400"
-            >
-              Cancelar
-            </button>
-          )}
-          {incidencia.problema_id && (
-            <Link
-              href={`/problemas/${incidencia.problema_id}`}
-              className="rounded-md border border-purple-300 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-300"
-            >
-              Ver Problema #{incidencia.problema_id}
-            </Link>
-          )}
-          <Link
-            href={`/equipos/${incidencia.device_id}`}
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
-          >
-            Ver Equipo
-          </Link>
-          <button
-            onClick={() => router.back()}
-            className="rounded-md border border-zinc-300 px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-600 dark:text-zinc-300"
-          >
-            Volver
-          </button>
-        </div>
+        <HeaderActions
+          incidencia={incidencia}
+          canCerrar={canCerrar}
+          canCancelar={canCancelar}
+          saving={saving}
+          onCerrar={handleCerrar}
+          onCancelar={handleCancelar}
+          onBack={() => router.back()}
+        />
       </div>
 
-      {/* Datos de la incidencia */}
       <div className="mb-8 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
         <div className="mb-4 grid grid-cols-2 gap-4 sm:grid-cols-3">
           <div>
@@ -424,17 +847,8 @@ export default function IncidenciaDetailPage() {
             </dt>
             <dd className="mt-0.5">
               <Badge
-                label={
-                  incidencia.prioridad.charAt(0).toUpperCase() +
-                  incidencia.prioridad.slice(1)
-                }
-                variant={
-                  incidencia.prioridad === 'alta'
-                    ? 'danger'
-                    : incidencia.prioridad === 'media'
-                      ? 'warning'
-                      : 'success'
-                }
+                label={capitalize(incidencia.prioridad)}
+                variant={prioridadVariant(incidencia.prioridad)}
               />
             </dd>
           </div>
@@ -451,48 +865,16 @@ export default function IncidenciaDetailPage() {
               Responsable
             </dt>
             <dd className="mt-0.5">
-              {/* Coordinador ASIGNA (pendiente) o RE-ASIGNA (en_ejecucion): selector
-                  + botón. Solo técnicos ACTIVOS. */}
               {canAsignar ? (
-                <div className="flex flex-col gap-1">
-                  {yaAsignada && (
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                      Asignada a:{' '}
-                      <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                        {responsable
-                          ? `${responsable.nombre} ${responsable.apellido}`
-                          : '—'}
-                      </span>
-                    </span>
-                  )}
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={editResponsable}
-                      onChange={(e) => setEditResponsable(e.target.value)}
-                      className="rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                    >
-                      <option value="" disabled>
-                        Seleccionar técnico
-                      </option>
-                      {usuarios
-                        .filter(
-                          (u) => u.rol === 'tecnico' && u.estado === 'activo',
-                        )
-                        .map((u) => (
-                          <option key={u.id} value={u.id}>
-                            {u.nombre} {u.apellido}
-                          </option>
-                        ))}
-                    </select>
-                    <button
-                      onClick={handleAsignar}
-                      disabled={saving || !editResponsable}
-                      className="rounded-md bg-blue-600 px-2.5 py-1 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {yaAsignada ? 'Re-asignar' : 'Asignar'}
-                    </button>
-                  </div>
-                </div>
+                <AsignarResponsableInline
+                  usuarios={usuarios}
+                  responsable={responsable}
+                  editResponsable={editResponsable}
+                  yaAsignada={yaAsignada}
+                  saving={saving}
+                  onEditResponsable={setEditResponsable}
+                  onAsignar={handleAsignar}
+                />
               ) : (
                 <span className="text-sm text-zinc-900 dark:text-zinc-100">
                   {responsable
@@ -502,15 +884,12 @@ export default function IncidenciaDetailPage() {
               )}
             </dd>
           </div>
-          {/* ITIL: impacto × urgencia = prioridad (derivada) + categoría */}
           <div>
             <dt className="text-xs font-medium text-zinc-500 uppercase">
               Impacto
             </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {(incidencia.impacto ?? 'media').replace(/^\w/, (c) =>
-                c.toUpperCase(),
-              )}
+              {capitalize(incidencia.impacto, 'media')}
             </dd>
           </div>
           <div>
@@ -518,9 +897,7 @@ export default function IncidenciaDetailPage() {
               Urgencia
             </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {(incidencia.urgencia ?? 'media').replace(/^\w/, (c) =>
-                c.toUpperCase(),
-              )}
+              {capitalize(incidencia.urgencia, 'media')}
             </dd>
           </div>
           <div>
@@ -528,9 +905,7 @@ export default function IncidenciaDetailPage() {
               Categoría
             </dt>
             <dd className="mt-0.5 text-sm text-zinc-900 dark:text-zinc-100">
-              {(incidencia.categoria ?? 'otro').replace(/^\w/, (c) =>
-                c.toUpperCase(),
-              )}
+              {capitalize(incidencia.categoria, 'otro')}
             </dd>
           </div>
           <div>
@@ -543,7 +918,6 @@ export default function IncidenciaDetailPage() {
           </div>
         </div>
 
-        {/* ITIL: timeline SLA */}
         <div className="mb-4 grid grid-cols-3 gap-4 rounded-md bg-zinc-50 p-3 dark:bg-zinc-800/50">
           <div>
             <dt className="text-xs font-medium text-zinc-500 uppercase">
@@ -582,7 +956,6 @@ export default function IncidenciaDetailPage() {
           </div>
         )}
 
-        {/* ITIL: vincular a un Problema (causa raíz) — gestión del coordinador */}
         {isCoordinador && !isCerrada && (
           <div className="border-t border-zinc-200 pt-4 dark:border-zinc-700">
             <dt className="text-xs font-medium text-zinc-500 uppercase">
@@ -610,258 +983,35 @@ export default function IncidenciaDetailPage() {
         )}
       </div>
 
-      {/* Mantenimiento Correctivo */}
       <div className="rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-700 dark:bg-zinc-900">
         <h2 className="mb-4 text-lg font-bold text-zinc-900 dark:text-white">
           Mantenimiento Correctivo
         </h2>
 
-        {/* Vista solo-lectura, salvo que el técnico deba registrar el mantenimiento */}
-        {!canRegistrarMantenimiento || hasMantenimiento ? (
-          <div className="space-y-4">
-            {mto ? (
-              <>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500 uppercase">
-                    Diagnostico
-                  </dt>
-                  <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                    {mto.diagnostico || '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500 uppercase">
-                    Acciones Realizadas
-                  </dt>
-                  <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                    {mto.acciones_realizadas || '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500 uppercase">
-                    Conclusion
-                  </dt>
-                  <dd className="mt-1 text-sm whitespace-pre-wrap text-zinc-700 dark:text-zinc-300">
-                    {mto.conclusion || '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500 uppercase">
-                    Fecha de Ejecucion
-                  </dt>
-                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {mto.fecha_ejecucion
-                      ? new Date(mto.fecha_ejecucion).toLocaleDateString()
-                      : '—'}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500 uppercase">
-                    Repuestos
-                  </dt>
-                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {mto.repuestos && mto.repuestos.length > 0 ? (
-                      <ul className="list-disc space-y-0.5 pl-5">
-                        {mto.repuestos.map((r) => (
-                          <li key={r.id}>
-                            {r.nombre}{' '}
-                            <span className="text-xs text-zinc-400">
-                              ({r.categoria})
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      '—'
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-zinc-500 uppercase">
-                    Adjuntos (fotos)
-                  </dt>
-                  <dd className="mt-1 text-sm text-zinc-700 dark:text-zinc-300">
-                    {mto.adjuntos && mto.adjuntos.length > 0 ? (
-                      <ul className="list-disc space-y-0.5 pl-5">
-                        {mto.adjuntos.map((a) => (
-                          <li key={a.id}>
-                            <a
-                              href={a.file_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 hover:underline dark:text-blue-400"
-                            >
-                              {a.filename}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      '—'
-                    )}
-                  </dd>
-                </div>
-              </>
-            ) : (
-              <p className="text-sm text-zinc-400">
-                No se ha registrado mantenimiento correctivo aun.
-              </p>
-            )}
-          </div>
+        {showMantenimientoView ? (
+          <MantenimientoView mto={mto} />
         ) : (
-          /* Edit mode WITHOUT existing mantenimiento */
-          <div className="space-y-4">
-            {/* Diagnostico */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Diagnostico <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={mtoDiagnostico}
-                onChange={(e) => setMtoDiagnostico(e.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-              />
-            </div>
-
-            {/* Acciones Realizadas */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Acciones Realizadas <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={mtoAcciones}
-                onChange={(e) => setMtoAcciones(e.target.value)}
-                rows={3}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-              />
-            </div>
-
-            {/* Conclusion */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Conclusion <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={mtoConclusion}
-                onChange={(e) => setMtoConclusion(e.target.value)}
-                rows={2}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-              />
-            </div>
-
-            {/* Fecha de Ejecucion (readonly) */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Fecha de Ejecucion
-              </label>
-              <input
-                type="date"
-                value={new Date().toISOString().split('T')[0]}
-                readOnly
-                className="w-full cursor-not-allowed rounded-md border border-zinc-300 bg-zinc-100 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
-              />
-            </div>
-
-            {/* Repuestos multi-select */}
-            <div ref={repuestosRef} className="relative">
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Repuestos
-              </label>
-              <button
-                type="button"
-                onClick={() => setRepuestosOpen((prev) => !prev)}
-                className="w-full rounded-md border border-zinc-300 px-3 py-2 text-left text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-              >
-                {selectedRepuestoIds.length === 0
-                  ? 'Seleccionar repuestos...'
-                  : `${selectedRepuestoIds.length} repuesto${selectedRepuestoIds.length > 1 ? 's' : ''} seleccionado${selectedRepuestoIds.length > 1 ? 's' : ''}`}
-                <span className="float-right">
-                  {repuestosOpen ? '\u25B2' : '\u25BC'}
-                </span>
-              </button>
-
-              {repuestosOpen && (
-                <div className="absolute z-10 mt-1 max-h-60 w-full overflow-y-auto rounded-md border border-zinc-300 bg-white shadow-lg dark:border-zinc-600 dark:bg-zinc-800">
-                  {Object.entries(repuestosByCategoria).map(([cat, items]) => (
-                    <div key={cat}>
-                      <div className="sticky top-0 bg-zinc-100 px-3 py-1.5 text-xs font-bold text-zinc-600 uppercase dark:bg-zinc-700 dark:text-zinc-300">
-                        {cat}
-                      </div>
-                      {items.map((r) => (
-                        <label
-                          key={r.id}
-                          className="flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-700"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedRepuestoIds.includes(r.id)}
-                            onChange={() => toggleRepuesto(r.id)}
-                            className="rounded border-zinc-300 dark:border-zinc-500"
-                          />
-                          {r.nombre}
-                        </label>
-                      ))}
-                    </div>
-                  ))}
-                  {repuestos.length === 0 && (
-                    <div className="px-3 py-2 text-sm text-zinc-400">
-                      No hay repuestos disponibles
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Adjuntos */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Adjuntos (fotos)
-              </label>
-              <div className="space-y-2">
-                {adjuntos.map((a, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nombre del archivo"
-                      value={a.filename}
-                      onChange={(e) =>
-                        updateAdjunto(i, 'filename', e.target.value)
-                      }
-                      className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                    />
-                    <input
-                      type="text"
-                      placeholder="URL del archivo"
-                      value={a.file_url}
-                      onChange={(e) =>
-                        updateAdjunto(i, 'file_url', e.target.value)
-                      }
-                      className="flex-1 rounded-md border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-600 dark:bg-zinc-800 dark:text-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeAdjunto(i)}
-                      className="text-sm text-red-400 hover:text-red-300"
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <button
-                type="button"
-                onClick={addAdjunto}
-                className="mt-2 rounded-md border border-dashed border-zinc-400 px-3 py-1.5 text-sm text-zinc-600 hover:border-zinc-500 hover:text-zinc-700 dark:border-zinc-500 dark:text-zinc-400 dark:hover:border-zinc-400 dark:hover:text-zinc-300"
-              >
-                + Agregar Adjunto
-              </button>
-            </div>
-          </div>
+          <MantenimientoForm
+            mtoDiagnostico={mtoDiagnostico}
+            mtoAcciones={mtoAcciones}
+            mtoConclusion={mtoConclusion}
+            onDiagnostico={setMtoDiagnostico}
+            onAcciones={setMtoAcciones}
+            onConclusion={setMtoConclusion}
+            repuestos={repuestos}
+            selectedRepuestoIds={selectedRepuestoIds}
+            repuestosOpen={repuestosOpen}
+            setRepuestosOpen={setRepuestosOpen}
+            toggleRepuesto={toggleRepuesto}
+            repuestosRef={repuestosRef}
+            adjuntos={adjuntos}
+            addAdjunto={addAdjunto}
+            updateAdjunto={updateAdjunto}
+            removeAdjunto={removeAdjunto}
+          />
         )}
       </div>
 
-      {/* Técnico: guardar el mantenimiento correctivo (-> incidencia Resuelta) */}
       <div className="mt-6 flex items-center gap-3">
         {canRegistrarMantenimiento && !hasMantenimiento && (
           <button

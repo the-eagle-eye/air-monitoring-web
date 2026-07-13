@@ -8,6 +8,8 @@ from app.services.ml_adapter import adapt_json_bytes
 
 router = APIRouter()
 
+_JSON_MEDIA_TYPE = "application/json"
+
 # Rutas del backend v3 de detección de anomalías por episodios
 # (ml-service-isolation), seleccionable con ML_BACKEND=isolation. El modelo
 # Random Forest que servía estas rutas en el ml-service "legacy" fue RETIRADO
@@ -74,7 +76,7 @@ async def proxy(request: Request, path: str):
         return Response(
             content='{"detail": "Not found"}',
             status_code=404,
-            media_type="application/json",
+            media_type=_JSON_MEDIA_TYPE,
         )
 
     upstream = _resolve_upstream(full_path)
@@ -82,7 +84,7 @@ async def proxy(request: Request, path: str):
         return Response(
             content='{"detail": "Service not found"}',
             status_code=404,
-            media_type="application/json",
+            media_type=_JSON_MEDIA_TYPE,
         )
 
     # Auth check
@@ -93,21 +95,21 @@ async def proxy(request: Request, path: str):
             return Response(
                 content='{"detail": "No autenticado"}',
                 status_code=401,
-                media_type="application/json",
+                media_type=_JSON_MEDIA_TYPE,
             )
         # RBAC check for write operations
         if not check_write_permission(full_path, request.method, user["rol"]):
             return Response(
                 content='{"detail": "No tiene permisos para esta accion"}',
                 status_code=403,
-                media_type="application/json",
+                media_type=_JSON_MEDIA_TYPE,
             )
         # RBAC check for read-restricted routes
         if not check_read_permission(full_path, user["rol"]):
             return Response(
                 content='{"detail": "No tiene permisos para esta accion"}',
                 status_code=403,
-                media_type="application/json",
+                media_type=_JSON_MEDIA_TYPE,
             )
 
     target_url = f"{upstream}{full_path}"
@@ -139,5 +141,5 @@ async def proxy(request: Request, path: str):
     return Response(
         content=content,
         status_code=resp.status_code,
-        media_type=resp.headers.get("content-type", "application/json"),
+        media_type=resp.headers.get("content-type", _JSON_MEDIA_TYPE),
     )
