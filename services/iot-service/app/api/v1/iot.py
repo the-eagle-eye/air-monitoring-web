@@ -26,6 +26,18 @@ from app.services.device_onboarding import (
 
 router = APIRouter()
 
+_EQUIPO_NOT_FOUND_RESPONSE = {404: {"description": "Equipo no encontrado"}}
+_LATEST_READING_RESPONSES = {
+    404: {"description": "Equipo o lecturas no encontradas"}
+}
+_EQUIPO_CONFLICT_RESPONSE = {
+    409: {"description": "Equipo ya existe o no esta en cuarentena"}
+}
+_CONFIRMAR_RESPONSES = {
+    **_EQUIPO_NOT_FOUND_RESPONSE,
+    **_EQUIPO_CONFLICT_RESPONSE,
+}
+
 
 def _lectura_to_response(lectura: LecturaIoT) -> dict:
     """Convert a LecturaIoT ORM instance to a dict with equipo_device_id."""
@@ -79,7 +91,11 @@ def get_all_readings(
     )
 
 
-@router.get("/readings/{device_id}", response_model=LecturaIoTListResponse)
+@router.get(
+    "/readings/{device_id}",
+    response_model=LecturaIoTListResponse,
+    responses=_EQUIPO_NOT_FOUND_RESPONSE,
+)
 def get_readings(
     device_id: str,
     page: int = Query(1, ge=1),
@@ -108,7 +124,11 @@ def get_readings(
     )
 
 
-@router.get("/readings/{device_id}/latest", response_model=LecturaIoTDetail)
+@router.get(
+    "/readings/{device_id}/latest",
+    response_model=LecturaIoTDetail,
+    responses=_LATEST_READING_RESPONSES,
+)
 def get_latest_reading(device_id: str, db: Session = Depends(get_db)):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
     if not equipo:
@@ -147,7 +167,11 @@ def list_equipos_pendientes(db: Session = Depends(get_db)):
     )
 
 
-@router.get("/equipos/{device_id}", response_model=EquipoResponse)
+@router.get(
+    "/equipos/{device_id}",
+    response_model=EquipoResponse,
+    responses=_EQUIPO_NOT_FOUND_RESPONSE,
+)
 def get_equipo(device_id: str, db: Session = Depends(get_db)):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
     if not equipo:
@@ -157,7 +181,12 @@ def get_equipo(device_id: str, db: Session = Depends(get_db)):
     return equipo
 
 
-@router.post("/equipos", response_model=EquipoResponse, status_code=201)
+@router.post(
+    "/equipos",
+    response_model=EquipoResponse,
+    status_code=201,
+    responses=_EQUIPO_CONFLICT_RESPONSE,
+)
 def create_equipo(data: EquipoCreate, db: Session = Depends(get_db)):
     existing = (
         db.query(Equipo).filter(Equipo.device_id == data.device_id).first()
@@ -175,7 +204,11 @@ def create_equipo(data: EquipoCreate, db: Session = Depends(get_db)):
 
 # C8: confirmar un equipo en cuarentena (no_confirmado -> activo). RBAC en el
 # gateway lo restringe a coordinador/admin.
-@router.post("/equipos/{device_id}/confirmar", response_model=EquipoResponse)
+@router.post(
+    "/equipos/{device_id}/confirmar",
+    response_model=EquipoResponse,
+    responses=_CONFIRMAR_RESPONSES,
+)
 def confirmar_equipo(
     device_id: str, data: EquipoConfirmar, db: Session = Depends(get_db)
 ):
@@ -202,7 +235,11 @@ def confirmar_equipo(
     return equipo
 
 
-@router.put("/equipos/{device_id}", response_model=EquipoResponse)
+@router.put(
+    "/equipos/{device_id}",
+    response_model=EquipoResponse,
+    responses=_EQUIPO_NOT_FOUND_RESPONSE,
+)
 def update_equipo(
     device_id: str, data: EquipoUpdate, db: Session = Depends(get_db)
 ):
@@ -220,7 +257,9 @@ def update_equipo(
     return equipo
 
 
-@router.delete("/equipos/{device_id}")
+@router.delete(
+    "/equipos/{device_id}", responses=_EQUIPO_NOT_FOUND_RESPONSE
+)
 def delete_equipo(device_id: str, db: Session = Depends(get_db)):
     equipo = db.query(Equipo).filter(Equipo.device_id == device_id).first()
     if not equipo:

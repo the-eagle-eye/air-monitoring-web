@@ -12,6 +12,10 @@ from app.schemas.usuario import (
 
 router = APIRouter()
 
+_NOT_FOUND = "Usuario no encontrado"
+_NOT_FOUND_RESPONSE = {404: {"description": _NOT_FOUND}}
+_EMAIL_TAKEN_RESPONSE = {409: {"description": "Email ya registrado"}}
+
 
 def _hash_password(password: str) -> str:
     import bcrypt
@@ -25,7 +29,12 @@ def list_usuarios(db: Session = Depends(get_db)):
     return [UsuarioResponse.model_validate(u) for u in items]
 
 
-@router.post("", response_model=UsuarioResponse, status_code=201)
+@router.post(
+    "",
+    response_model=UsuarioResponse,
+    status_code=201,
+    responses=_EMAIL_TAKEN_RESPONSE,
+)
 def create_usuario(data: UsuarioCreate, db: Session = Depends(get_db)):
     existing = (
         db.query(Usuario).filter(Usuario.email == data.email).first()
@@ -42,13 +51,17 @@ def create_usuario(data: UsuarioCreate, db: Session = Depends(get_db)):
     return UsuarioResponse.model_validate(usuario)
 
 
-@router.put("/{usuario_id}", response_model=UsuarioResponse)
+@router.put(
+    "/{usuario_id}",
+    response_model=UsuarioResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def update_usuario(
     usuario_id: int, data: UsuarioUpdate, db: Session = Depends(get_db)
 ):
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     updates = data.model_dump(exclude_unset=True)
     if "password" in updates:
         password = updates.pop("password")
@@ -61,26 +74,36 @@ def update_usuario(
     return UsuarioResponse.model_validate(usuario)
 
 
-@router.delete("/{usuario_id}", status_code=204)
+@router.delete(
+    "/{usuario_id}", status_code=204, responses=_NOT_FOUND_RESPONSE
+)
 def delete_usuario(usuario_id: int, db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     usuario.estado = "inactivo"
     db.commit()
 
 
-@router.get("/by-email/{email}", response_model=UsuarioWithHash)
+@router.get(
+    "/by-email/{email}",
+    response_model=UsuarioWithHash,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_usuario_by_email(email: str, db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.email == email).first()
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return UsuarioWithHash.model_validate(usuario)
 
 
-@router.get("/{usuario_id}", response_model=UsuarioResponse)
+@router.get(
+    "/{usuario_id}",
+    response_model=UsuarioResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_usuario(usuario_id: int, db: Session = Depends(get_db)):
     usuario = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     if not usuario:
-        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return UsuarioResponse.model_validate(usuario)

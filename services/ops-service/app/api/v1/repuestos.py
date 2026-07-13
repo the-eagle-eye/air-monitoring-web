@@ -7,6 +7,9 @@ from app.schemas.repuesto import RepuestoCreate, RepuestoResponse, RepuestoUpdat
 
 router = APIRouter()
 
+_NOT_FOUND = "Repuesto no encontrado"
+_NOT_FOUND_RESPONSE = {404: {"description": _NOT_FOUND}}
+
 
 @router.get("", response_model=list[RepuestoResponse])
 def list_repuestos(
@@ -29,21 +32,29 @@ def create_repuesto(data: RepuestoCreate, db: Session = Depends(get_db)):
     return RepuestoResponse.model_validate(repuesto)
 
 
-@router.get("/{repuesto_id}", response_model=RepuestoResponse)
+@router.get(
+    "/{repuesto_id}",
+    response_model=RepuestoResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_repuesto(repuesto_id: int, db: Session = Depends(get_db)):
     repuesto = db.query(Repuesto).filter(Repuesto.id == repuesto_id).first()
     if not repuesto:
-        raise HTTPException(status_code=404, detail="Repuesto no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     return RepuestoResponse.model_validate(repuesto)
 
 
-@router.put("/{repuesto_id}", response_model=RepuestoResponse)
+@router.put(
+    "/{repuesto_id}",
+    response_model=RepuestoResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def update_repuesto(
     repuesto_id: int, data: RepuestoUpdate, db: Session = Depends(get_db)
 ):
     repuesto = db.query(Repuesto).filter(Repuesto.id == repuesto_id).first()
     if not repuesto:
-        raise HTTPException(status_code=404, detail="Repuesto no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     updates = data.model_dump(exclude_unset=True)
     for key, value in updates.items():
         setattr(repuesto, key, value)
@@ -52,10 +63,12 @@ def update_repuesto(
     return RepuestoResponse.model_validate(repuesto)
 
 
-@router.delete("/{repuesto_id}", status_code=204)
+@router.delete(
+    "/{repuesto_id}", status_code=204, responses=_NOT_FOUND_RESPONSE
+)
 def delete_repuesto(repuesto_id: int, db: Session = Depends(get_db)):
     repuesto = db.query(Repuesto).filter(Repuesto.id == repuesto_id).first()
     if not repuesto:
-        raise HTTPException(status_code=404, detail="Repuesto no encontrado")
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
     repuesto.estado = "inactivo"
     db.commit()

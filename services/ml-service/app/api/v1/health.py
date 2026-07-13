@@ -26,6 +26,8 @@ from app.services import (
 
 router = APIRouter()
 
+_NOT_FOUND_RESPONSE = {404: {"description": "Sin estado de salud para el equipo"}}
+
 
 @router.post("/evaluate", response_model=HealthEvaluateResponse)
 def evaluate_reading(req: HealthEvaluateRequest, db: Session = Depends(get_db)):
@@ -54,7 +56,11 @@ def device_readings(device_id: str, limit: int = 300, db: Session = Depends(get_
     }
 
 
-@router.get("/{device_id}/state", response_model=HealthDeviceStateResponse)
+@router.get(
+    "/{device_id}/state",
+    response_model=HealthDeviceStateResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def device_state(device_id: str, db: Session = Depends(get_db)):
     state = get_device_state(db, device_id)
     if state is None:

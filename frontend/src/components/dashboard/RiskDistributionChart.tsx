@@ -5,6 +5,17 @@ import type { RiskDistribution } from '@/types/dashboard';
 
 const RADIAN = Math.PI / 180;
 
+function makeLegendFormatter(data: RiskDistribution[]) {
+  return function LegendItemLabel(value: string) {
+    const item = data.find((d) => d.name === value);
+    return (
+      <span style={{ color: '#d4d4d8', fontSize: 13 }}>
+        {value} ({item?.value ?? 0})
+      </span>
+    );
+  };
+}
+
 const Chart = dynamic(
   () =>
     import('recharts').then((mod) => {
@@ -117,14 +128,7 @@ const Chart = dynamic(
               <Legend
                 verticalAlign="bottom"
                 height={36}
-                formatter={(value: string) => {
-                  const item = data.find((d) => d.name === value);
-                  return (
-                    <span style={{ color: '#d4d4d8', fontSize: 13 }}>
-                      {value} ({item?.value ?? 0})
-                    </span>
-                  );
-                }}
+                formatter={makeLegendFormatter(data)}
               />
             </PieChart>
           </ResponsiveContainer>

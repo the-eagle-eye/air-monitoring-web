@@ -33,6 +33,13 @@ class LinkProblemaRequest(BaseModel):
 
 router = APIRouter()
 
+_NOT_FOUND_RESPONSE = {404: {"description": "Incidencia no encontrada"}}
+_INVALID_TRANSITION_RESPONSE = {400: {"description": "Transicion invalida"}}
+_UPDATE_RESPONSES = {**_INVALID_TRANSITION_RESPONSE, **_NOT_FOUND_RESPONSE}
+_LINK_PROBLEMA_RESPONSE = {
+    404: {"description": "Incidencia o problema no encontrado"}
+}
+
 
 @router.get("", response_model=IncidenciaListResponse)
 def list_incidencias(
@@ -105,7 +112,11 @@ def _build_mantenimiento_response(
     )
 
 
-@router.get("/{incidencia_id}", response_model=IncidenciaDetailResponse)
+@router.get(
+    "/{incidencia_id}",
+    response_model=IncidenciaDetailResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_incidencia(incidencia_id: int, db: Session = Depends(get_db)):
     incidencia = incidencia_service.get_incidencia(db, incidencia_id)
     if not incidencia:
@@ -122,7 +133,11 @@ def get_incidencia(incidencia_id: int, db: Session = Depends(get_db)):
     )
 
 
-@router.put("/{incidencia_id}", response_model=IncidenciaResponse)
+@router.put(
+    "/{incidencia_id}",
+    response_model=IncidenciaResponse,
+    responses=_UPDATE_RESPONSES,
+)
 def update_incidencia(
     incidencia_id: int,
     data: IncidenciaUpdate,
@@ -139,7 +154,11 @@ def update_incidencia(
     return IncidenciaResponse.model_validate(incidencia)
 
 
-@router.post("/{incidencia_id}/problema", response_model=IncidenciaResponse)
+@router.post(
+    "/{incidencia_id}/problema",
+    response_model=IncidenciaResponse,
+    responses=_LINK_PROBLEMA_RESPONSE,
+)
 def link_problema(incidencia_id: int, data: LinkProblemaRequest,
                   db: Session = Depends(get_db)):
     """ITIL: vincula (o desvincula con problema_id=null) la incidencia a un

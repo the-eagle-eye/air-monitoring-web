@@ -84,6 +84,61 @@ def _as_utc(ts: datetime) -> datetime:
     return ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc)
 
 
+def _clear_to_ok(state: HealthDeviceState, now: datetime) -> bool:
+    """Set transmission back to OK if it wasn't. Returns True on change."""
+    if state.transmission_state == TRANSMISSION_OK:
+        return False
+    state.transmission_state = TRANSMISSION_OK
+    state.transmission_severity = None
+    state.updated_at = now
+    return True
+
+
+def _mark_loss(
+    state: HealthDeviceState, severity: str, now: datetime
+) -> bool:
+    """Mark or escalate SIN_TRANSMISION. Returns True on change."""
+    if (state.transmission_state == SIN_TRANSMISION
+            and state.transmission_severity == severity):
+        return False
+    state.transmission_state = SIN_TRANSMISION
+    state.transmission_severity = severity
+    state.updated_at = now
+    return True
+
+
+def _process_device(
+    state: HealthDeviceState,
+    device_id: str,
+    now: datetime,
+    ops_url: str,
+) -> tuple[str, dict | None]:
+    """Classify a device and mutate its state. Returns (outcome, payload).
+
+    Outcomes: 'ok' | 'cleared' | 'silenced' | 'marked' | 'noop'.
+    """
+    gap_min = (now - _as_utc(state.last_reading_ts)).total_seconds() / 60.0
+    severity = _severity_for_gap(gap_min)
+
+    if severity is None:
+        # dentro de tolerancia -> transmision viva; limpiar si marcado (CT-04)
+        return ("cleared" if _clear_to_ok(state, now) else "ok"), None
+
+    # gap supera tolerancia. CT-05: silenciar si hay incidencia abierta
+    if _has_open_incidencia(ops_url, device_id):
+        _clear_to_ok(state, now)
+        return "silenced", None
+
+    # marcar / escalar SIN_TRANSMISION (CT-01/CT-02)
+    if _mark_loss(state, severity, now):
+        return "marked", {
+            "device_id": device_id,
+            "severity": severity,
+            "gap_min": round(gap_min, 1),
+        }
+    return "noop", None
+
+
 def run_watchdog(db: Session, now: datetime | None = None,
                  iot_url: str = IOT_SERVICE_URL,
                  ops_url: str = OPS_SERVICE_URL) -> dict:
@@ -94,7 +149,10 @@ def run_watchdog(db: Session, now: datetime | None = None,
     """
     now = _as_utc(now or datetime.now(timezone.utc))
     devices = _list_active_devices(iot_url)
-    marked, cleared, silenced, ok = [], [], [], []
+    marked: list[dict] = []
+    cleared: list[str] = []
+    silenced: list[str] = []
+    ok: list[str] = []
 
     for device_id in devices:
         state = db.get(HealthDeviceState, device_id)
@@ -102,37 +160,16 @@ def run_watchdog(db: Session, now: datetime | None = None,
             # nunca recibimos una lectura de este equipo -> no hay base para el gap
             continue
 
-        gap_min = (now - _as_utc(state.last_reading_ts)).total_seconds() / 60.0
-        severity = _severity_for_gap(gap_min)
-
-        if severity is None:
-            # dentro de tolerancia -> transmision viva; limpiar si marcado (CT-04)
-            if state.transmission_state != TRANSMISSION_OK:
-                state.transmission_state = TRANSMISSION_OK
-                state.transmission_severity = None
-                state.updated_at = now
-                cleared.append(device_id)
-            else:
-                ok.append(device_id)
-            continue
-
-        # gap supera tolerancia. CT-05: silenciar si hay incidencia abierta
-        if _has_open_incidencia(ops_url, device_id):
-            if state.transmission_state != TRANSMISSION_OK:
-                state.transmission_state = TRANSMISSION_OK
-                state.transmission_severity = None
-                state.updated_at = now
+        outcome, payload = _process_device(state, device_id, now, ops_url)
+        if outcome == "marked":
+            marked.append(payload)  # type: ignore[arg-type]
+        elif outcome == "cleared":
+            cleared.append(device_id)
+        elif outcome == "silenced":
             silenced.append(device_id)
-            continue
-
-        # marcar / escalar SIN_TRANSMISION (CT-01/CT-02)
-        if (state.transmission_state != SIN_TRANSMISION
-                or state.transmission_severity != severity):
-            state.transmission_state = SIN_TRANSMISION
-            state.transmission_severity = severity
-            state.updated_at = now
-            marked.append({"device_id": device_id, "severity": severity,
-                           "gap_min": round(gap_min, 1)})
+        elif outcome == "ok":
+            ok.append(device_id)
+        # 'noop' -> ya estaba SIN_TRANSMISION con misma severidad, sin cambios
 
     db.commit()
     summary = {

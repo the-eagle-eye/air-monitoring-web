@@ -14,6 +14,8 @@ from app.services import calibracion_service, incidencia_service
 
 router = APIRouter()
 
+_NOT_FOUND_RESPONSE = {404: {"description": "Calibracion no encontrada"}}
+
 
 @router.post("/check-annual")
 def check_annual_calibrations(db: Session = Depends(get_db)):
@@ -70,7 +72,11 @@ def create_calibracion(
     return CalibracionResponse.model_validate(calibracion)
 
 
-@router.get("/{calibracion_id}", response_model=CalibracionResponse)
+@router.get(
+    "/{calibracion_id}",
+    response_model=CalibracionResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def get_calibracion(calibracion_id: int, db: Session = Depends(get_db)):
     calibracion = calibracion_service.get_calibracion(db, calibracion_id)
     if not calibracion:
@@ -80,7 +86,11 @@ def get_calibracion(calibracion_id: int, db: Session = Depends(get_db)):
     return _calibracion_with_estado(calibracion)
 
 
-@router.put("/{calibracion_id}", response_model=CalibracionResponse)
+@router.put(
+    "/{calibracion_id}",
+    response_model=CalibracionResponse,
+    responses=_NOT_FOUND_RESPONSE,
+)
 def update_calibracion(
     calibracion_id: int,
     data: CalibracionUpdate,

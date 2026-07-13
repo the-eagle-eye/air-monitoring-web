@@ -179,8 +179,6 @@ test.describe('Login flow', () => {
     await page.goto('/dashboard', { waitUntil: 'commit' }).catch((e: Error) => {
       if (!e.message.includes('navigation')) throw e;
     });
-    await expect
-      .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
-      .toBe('/login');
+    await expect(page).toHaveURL(/\/login$/, { timeout: 10_000 });
   });
 });

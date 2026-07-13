@@ -73,48 +73,67 @@ def _transition(ops_url: str, incidencia_id: int, estado: str, nota: str) -> boo
         return False
 
 
+def _parse_resolved_ts(inc: dict) -> datetime | None:
+    """Extrae la marca temporal de resolución si existe y es parseable."""
+    resolved_at = inc.get("fecha_resolucion") or inc.get("updated_at")
+    if not resolved_at:
+        return None
+    try:
+        return _as_utc(
+            datetime.fromisoformat(resolved_at.replace("Z", "+00:00"))
+        )
+    except ValueError:
+        return None
+
+
+def _classify_muted(inc: dict, now: datetime, ops_url: str) -> str:
+    """Sin lecturas: cancelar si supera RESUELTO_TIMEOUT_H, sino dejar pendiente."""
+    ts = _parse_resolved_ts(inc)
+    if ts is None or (now - ts) <= timedelta(hours=RESUELTO_TIMEOUT_H):
+        return "pendiente"
+    ok = _transition(
+        ops_url, inc["id"], "cancelado",
+        "Auto-cerrada: sin confirmación del ensemble (equipo sin datos)",
+    )
+    return "cancelado" if ok else "pendiente"
+
+
+def _classify_with_readings(inc: dict, rows: list, ops_url: str) -> str:
+    """Con lecturas: última anómala → pendiente; N_CONFIRM sanas → finalizar."""
+    if rows[0].and_alert:
+        return "pendiente"
+    confirmadas = [r for r in rows if not r.and_alert]
+    if len(rows) < N_CONFIRM or len(confirmadas) != N_CONFIRM:
+        return "pendiente"
+    ok = _transition(
+        ops_url, inc["id"], "finalizado",
+        "Auto-finalizada: arreglo confirmado por el ensemble "
+        f"({N_CONFIRM} lecturas normales)",
+    )
+    return "finalizado" if ok else "pendiente"
+
+
 def run_autoclose(db: Session, now: datetime | None = None,
                   ops_url: str = OPS_SERVICE_URL) -> dict:
     """Evalúa las incidencias en 'resuelto' y cierra las que corresponda."""
     now = _as_utc(now or datetime.now(timezone.utc))
-    finalizadas, canceladas, pendientes = [], [], []
+    finalizadas: list[int] = []
+    canceladas: list[int] = []
+    pendientes: list[int] = []
+    buckets = {
+        "finalizado": finalizadas,
+        "cancelado": canceladas,
+        "pendiente": pendientes,
+    }
 
     for inc in _resolved_monitor_incidencias(ops_url):
-        device_id = inc["device_id"]
-        rows = _recent_readings(db, device_id, N_CONFIRM)
-
-        if not rows:
-            # sin lecturas: chequear timeout desde que se resolvió
-            resolved_at = inc.get("fecha_resolucion") or inc.get("updated_at")
-            if resolved_at:
-                try:
-                    ts = _as_utc(datetime.fromisoformat(
-                        resolved_at.replace("Z", "+00:00")))
-                    if (now - ts) > timedelta(hours=RESUELTO_TIMEOUT_H):
-                        if _transition(ops_url, inc["id"], "cancelado",
-                                       "Auto-cerrada: sin confirmación del "
-                                       "ensemble (equipo sin datos)"):
-                            canceladas.append(inc["id"])
-                            continue
-                except ValueError:
-                    pass
-            pendientes.append(inc["id"])
-            continue
-
-        # última lectura anómala -> arreglo no confirmado, dejar en resuelto
-        if rows[0].and_alert:
-            pendientes.append(inc["id"])
-            continue
-
-        # ¿N_CONFIRM lecturas SANO consecutivas (más recientes)?
-        confirmadas = [r for r in rows if not r.and_alert]
-        if len(rows) >= N_CONFIRM and len(confirmadas) == N_CONFIRM:
-            if _transition(ops_url, inc["id"], "finalizado",
-                           "Auto-finalizada: arreglo confirmado por el ensemble "
-                           f"({N_CONFIRM} lecturas normales)"):
-                finalizadas.append(inc["id"])
-                continue
-        pendientes.append(inc["id"])
+        rows = _recent_readings(db, inc["device_id"], N_CONFIRM)
+        outcome = (
+            _classify_muted(inc, now, ops_url)
+            if not rows
+            else _classify_with_readings(inc, rows, ops_url)
+        )
+        buckets[outcome].append(inc["id"])
 
     summary = {"finalizadas": finalizadas, "canceladas": canceladas,
                "pendientes": pendientes, "ran_at": now.isoformat()}
