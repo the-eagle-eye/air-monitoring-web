@@ -121,3 +121,16 @@ están implementados y verificados; se listan para dar contexto.
     Cuando exista la infra prod: (a) agregar el secret `OPS_SERVICE_URL` en
     Settings → Secrets and variables → Actions del repo, (b) descomentar el
     bloque `schedule` en el workflow.
+21. **Implementar SonarCloud** (2026-07-12) — Spec en
+    `specs/spec-sonarqube-cloud.md`. **Fases 1-4 hechas** en rama
+    `chore/sonarcloud-setup`: org `the-eagle-eye` creada + 5 proyectos
+    independientes (no monorepo mode; Free plan no lo incluye) mapeados al
+    mismo repo GitHub y diferenciados por `sonar.projectKey`
+    (`air-monitoring-{api-gateway,iot-service,ml-service,ops-service,frontend}`);
+    `SONAR_TOKEN` único de org como GitHub Secret; `pytest-cov` + `--cov=app`
+    en los 4 backends; jest `--coverage` en frontend; 5
+    `sonar-project.properties`; scanner step en ambos workflows CI con
+    `fetch-depth: 0`. **Pendiente Fase 5** (~2-3 sem baseline): definir
+    Quality Gate "AirMon Standard" (new code 70% cov / 60% frontend / 65% ml,
+    dup 3%, ratings A, hotspots 100%) y activar los 5 checks Sonar como
+    required en branch protection de `main`/`dev`.

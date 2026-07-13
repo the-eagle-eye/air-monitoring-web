@@ -50,6 +50,8 @@ CLAUDE.md
 htmlcov/
 .pytest_cache/
 coverage/
+coverage.xml
+.scannerwork/
 
 # Docker
 *.log
