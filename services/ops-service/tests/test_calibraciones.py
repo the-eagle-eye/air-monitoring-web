@@ -88,3 +88,76 @@ class TestCalibraciones:
         assert resp.status_code == 200
         assert resp.json()["estado"] == "completada"
         assert resp.json()["incidencia_id"] is None
+
+    def test_update_calibracion_not_found(self, client):
+        """PUT sobre un id inexistente -> 404 (línea 103 del router)."""
+        resp = client.put("/api/v1/calibraciones/9999", json={
+            "nota": "no existe",
+        })
+        assert resp.status_code == 404
+
+    def test_get_calibracion_incluye_incidencia_estado(self, client):
+        """Cubre línea 36: cuando la calibración tiene incidencia asociada,
+        se propaga `incidencia_estado` a la respuesta."""
+        inc_resp = client.post("/api/v1/incidencias", json={
+            "device_id": "T500", "tipo": "calibracion",
+        })
+        inc_id = inc_resp.json()["id"]
+
+        cal_resp = client.post("/api/v1/calibraciones", json={
+            "device_id": "T500",
+            "incidencia_id": inc_id,
+        })
+        cal_id = cal_resp.json()["id"]
+
+        resp = client.get(f"/api/v1/calibraciones/{cal_id}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["incidencia_id"] == inc_id
+        # el campo lo agrega el helper _calibracion_with_estado
+        assert body["incidencia_estado"] == "pendiente"
+
+    def test_list_calibraciones_tecnico_filtra_por_responsable(self, client):
+        """Cubre líneas 51-55: si el header x-user-rol=tecnico se envía con
+        x-user-id numérico, sólo devuelve calibraciones cuya incidencia esté
+        asignada a ese técnico."""
+        # crear dos calibraciones sueltas (sin incidencia) -> técnico no las ve
+        client.post("/api/v1/calibraciones", json={"device_id": "T101"})
+        client.post("/api/v1/calibraciones", json={"device_id": "T102"})
+
+        resp = client.get(
+            "/api/v1/calibraciones",
+            headers={"x-user-rol": "tecnico", "x-user-id": "2"},
+        )
+        assert resp.status_code == 200
+        # ninguna incidencia asignada al técnico id=2 -> 0 items
+        assert resp.json()["total"] == 0
+
+    def test_list_calibraciones_tecnico_x_user_id_no_numerico_ignora(self, client):
+        """Cubre la rama except ValueError: si x-user-id no es int, el filtro
+        NO se aplica y devuelve las calibraciones normalmente."""
+        client.post("/api/v1/calibraciones", json={"device_id": "T101"})
+        client.post("/api/v1/calibraciones", json={"device_id": "T102"})
+
+        resp = client.get(
+            "/api/v1/calibraciones",
+            headers={"x-user-rol": "tecnico", "x-user-id": "no-es-int"},
+        )
+        assert resp.status_code == 200
+        # sin filtro -> ambas
+        assert resp.json()["total"] == 2
+
+    def test_check_annual_endpoint(self, client, monkeypatch):
+        """Cubre líneas 20-30 del router: POST /calibraciones/check-annual."""
+        from app.api.v1 import calibraciones as calibraciones_router
+
+        monkeypatch.setattr(
+            calibraciones_router.incidencia_service,
+            "check_annual_calibrations",
+            lambda db, url: [],
+        )
+        resp = client.post("/api/v1/calibraciones/check-annual")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["created"] == 0
+        assert body["incidencias"] == []
