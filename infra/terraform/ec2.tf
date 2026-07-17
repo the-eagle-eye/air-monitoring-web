@@ -46,6 +46,14 @@ resource "aws_iam_instance_profile" "ec2" {
   role = aws_iam_role.ec2.name
 }
 
+# Backdoor de debug: SSM Session Manager. Cuando SSH falla (p.ej. cloud-init a
+# medio hacer, sshd caído), `aws ssm start-session --target <instance-id>` da
+# shell sin exponer :22 públicamente. Vale la pena tenerlo siempre.
+resource "aws_iam_role_policy_attachment" "ssm_managed" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
 resource "aws_key_pair" "main" {
   key_name   = "airmon-key"
   public_key = var.ssh_public_key

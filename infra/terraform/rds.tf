@@ -21,6 +21,7 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
   skip_final_snapshot    = true
-  backup_retention_period = 7
+  # Free-tier de AWS no permite retención > 0. Cambiar a 7 al salir de free-tier.
+  backup_retention_period = 0
   tags = { Name = "airmon-db" }
 }
