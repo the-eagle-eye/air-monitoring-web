@@ -18,7 +18,7 @@ APP_DIR=/home/ec2-user/air-monitoring-web
 #    `docker compose build` requiere buildx >= 0.17 desde compose v2.24 (2024).
 #    AL2023 no lo trae por default; se instala como cli-plugin junto con compose.
 dnf update -y
-dnf install -y docker tar gzip
+dnf install -y docker tar gzip rsync
 systemctl enable --now docker
 usermod -aG docker ec2-user
 mkdir -p /usr/local/lib/docker/cli-plugins

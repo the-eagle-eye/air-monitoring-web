@@ -26,6 +26,12 @@ APP_DIR=/home/ec2-user/air-monitoring-web
 
 echo "=== airmon deploy $(date -u +%FT%TZ) ==="
 
+# rsync no viene en Amazon Linux 2023 por defecto. Instalar si falta
+# (idempotente — dnf salta si ya está instalado).
+if ! command -v rsync >/dev/null 2>&1; then
+  dnf install -y rsync
+fi
+
 if [ ! -d "$APP_DIR" ]; then
   echo "APP_DIR $APP_DIR no existe. La EC2 debió inicializarse con user_data primero." >&2
   exit 1
