@@ -123,3 +123,21 @@ class AutocloseResponse(BaseModel):
     canceladas: list[int]
     pendientes: list[int]
     ran_at: str
+
+
+class TrainingStateItem(BaseModel):
+    """Estado de warm-up por estación (C11)."""
+
+    device_id: str
+    state: str
+    readings_valid_count: int
+    target: int
+    eta_days: float | None
+    attempts: int
+    last_error: str | None
+    model_version: str | None
+    updated_at: datetime
+
+
+class TrainingStateResponse(BaseModel):
+    items: list[TrainingStateItem]

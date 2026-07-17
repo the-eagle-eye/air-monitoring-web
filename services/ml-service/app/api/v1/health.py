@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models.station_training import StationTrainingState
 from app.schemas.health import (
     HealthDeviceStateResponse,
     HealthEvaluateRequest,
@@ -13,6 +14,8 @@ from app.schemas.health import (
     NoTransmissionResponse,
     RetrainCheckResponse,
     ThetaRecalResponse,
+    TrainingStateItem,
+    TrainingStateResponse,
     WatchdogRunResponse,
 )
 from app.services.health_service import evaluate, get_device_state, get_readings
@@ -21,6 +24,7 @@ from app.services import (
     metrics_service,
     retrain_service,
     theta_service,
+    training_service,
     watchdog_service,
 )
 
@@ -138,3 +142,42 @@ def run_autoclose_now(db: Session = Depends(get_db)):
     """Auto-cierre ITIL on-demand (I2.7): cierra incidencias en 'resuelto' con
     lecturas SANO confirmadas o timeout. El scheduler ya lo corre cada 15 min."""
     return autoclose_service.run_autoclose(db)
+
+
+@router.get("/training-state", response_model=TrainingStateResponse)
+def training_state(
+    all: bool = False,  # noqa: A002 — nombre del query param del spec
+    db: Session = Depends(get_db),
+):
+    """Progreso de warm-up (C11) por estación.
+
+    Por defecto lista sólo estaciones que aún no están entrenadas (nueva /
+    recolectando / entrenando / error) — el dashboard las muestra en el widget
+    "Equipos en warm-up". Con `?all=true` incluye las entrenadas.
+    Ver docs/spec-auto-training-onboarding.md §8.
+    """
+    q = db.query(StationTrainingState)
+    if not all:
+        q = q.filter(StationTrainingState.state != "entrenado")
+    rows = q.order_by(StationTrainingState.updated_at.desc()).all()
+
+    target = training_service.WARMUP_MIN_ROWS
+    items = []
+    for r in rows:
+        eta = None
+        if r.state == "recolectando" and r.readings_valid_count < target:
+            # 5 min por lectura -> días hasta cruzar el umbral
+            remaining = target - r.readings_valid_count
+            eta = round((remaining * 5) / 1440, 2)
+        items.append(TrainingStateItem(
+            device_id=r.device_id,
+            state=r.state,
+            readings_valid_count=r.readings_valid_count,
+            target=target,
+            eta_days=eta,
+            attempts=r.attempts,
+            last_error=r.last_error,
+            model_version=r.model_version,
+            updated_at=r.updated_at,
+        ))
+    return TrainingStateResponse(items=items)

@@ -111,12 +111,49 @@ def test_retrain_station_skips_when_disabled(art_dir, db_session, monkeypatch):
     assert r["action"] == "skipped"
 
 
-def test_retrain_station_triggers_when_enabled(art_dir, db_session, monkeypatch):
+def test_retrain_station_delegates_to_training_service(
+    art_dir, db_session, monkeypatch
+):
+    """Con RETRAIN_ENABLED=1, retrain_station delega en training_service.train_station
+    con source='retrain'. Aquí mockeamos el trainer para verificar el contrato."""
     monkeypatch.setattr(rs, "RETRAIN_ENABLED", True)
-    registry._cache["DEV1"] = {"fake": True}
+
+    called: list[tuple[str, str]] = []
+
+    def _fake_train(db, sid, *, source):
+        called.append((sid, source))
+        return {
+            "station_id": sid, "action": "trained", "source": source,
+            "rows_train": 3000, "theta": 0.1, "theta_train": 0.1,
+            "model_version": f"vigishield-ensemble-v1-{sid}-fake",
+        }
+
+    monkeypatch.setattr(rs.training_service, "train_station", _fake_train)
+
     r = rs.retrain_station(db_session, "DEV1")
-    assert r["action"] == "triggered"
-    assert "DEV1" not in registry._cache  # cache invalidado
+
+    assert called == [("DEV1", "retrain")]
+    assert r["action"] == "trained"
+    assert r["source"] == "retrain"
+
+
+def test_retrain_station_propagates_cr04_rejection(
+    art_dir, db_session, monkeypatch
+):
+    """Cuando el trainer rechaza el bundle por CR-04, retrain_station devuelve
+    el mismo payload — sin ocultarlo."""
+    monkeypatch.setattr(rs, "RETRAIN_ENABLED", True)
+
+    def _fake_reject(db, sid, *, source):
+        return {"station_id": sid, "action": "rejected_cr04",
+                "reason": "recon_error mediano 0.5 > 2.0× 0.1"}
+
+    monkeypatch.setattr(rs.training_service, "train_station", _fake_reject)
+
+    r = rs.retrain_station(db_session, "DEV1")
+
+    assert r["action"] == "rejected_cr04"
+    assert "recon_error" in r["reason"]
 
 
 # --- C5.T4: endpoint diagnóstico ---------------------------------------------

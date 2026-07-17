@@ -1,10 +1,10 @@
 """C5 — Reentrenamiento del ensemble por degradación / programado.
 
-Este módulo aporta la DECISIÓN (should_retrain) y la ORQUESTACIÓN segura
-(retrain_station), no reimplementa el entrenamiento: el pipeline pesado
-(01_build_dataset → 02/03 train → θ) corre en batch dentro del contenedor con
-numpy 1.26 (lección P6) vía retrain_in_container.py. Ver docs/plan-c1-c6-c4-c5.md
-y docs/spec-transmision-y-reentrenamiento.md §2.
+Este módulo aporta la DECISIÓN (should_retrain) y la ORQUESTACIÓN
+(retrain_station). El entrenamiento en sí lo hace `training_service.train_station`
+con `source="retrain"` (spec docs/spec-auto-training-onboarding.md §5), que
+incluye la guarda CR-04: si el modelo nuevo no supera al anterior sobre un
+holdout, se descarta atómicamente y el bundle vigente se preserva.
 
 `should_retrain` consume las métricas persistidas por C6 (`model_metrics`) y el
 θ del registry, aplicando los criterios de degradación de la spec §2.3.
@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy.orm import Session
 
 from app.models.model_metric import ModelMetric
+from app.services import training_service
 from app.services.health_service import registry
 
 logger = logging.getLogger(__name__)
@@ -99,18 +100,12 @@ def evaluate_all(db: Session, now: datetime | None = None) -> list[dict]:
 def retrain_station(db: Session, station_id: str) -> dict:
     """Orquesta el reentrenamiento de una estación (opt-in, RETRAIN_ENABLED).
 
-    NO reimplementa el entrenamiento: delega al pipeline batch. Salvaguarda
-    (spec CR-04): si el modelo nuevo no mejora, se conserva el anterior. Esta
-    función deja el gancho de orquestación; la ejecución del pipeline pesado es
-    un job batch fuera del request-path.
+    Delega en `training_service.train_station(source="retrain")`, que aplica
+    la ventana de 90 días, la guarda CR-04, la escritura atómica de artefactos
+    y la invalidación del registry (spec §5).
     """
     if not RETRAIN_ENABLED:
         return {"station_id": station_id, "action": "skipped",
                 "reason": "RETRAIN_ENABLED=0 (reentrenamiento es opt-in y costoso)"}
-    # El pipeline pesado corre en batch (retrain_in_container.py). Aquí se
-    # registraría el disparo; tras completarse, invalidar el cache del registry.
-    logger.info("Reentrenamiento solicitado para %s (delegar a job batch)",
-                station_id)
-    registry.invalidate(station_id)
-    return {"station_id": station_id, "action": "triggered",
-            "note": "pipeline batch encolado; artefactos se versionan al completar"}
+    logger.info("Reentrenamiento solicitado para %s -> training_service", station_id)
+    return training_service.train_station(db, station_id, source="retrain")

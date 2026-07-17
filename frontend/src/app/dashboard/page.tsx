@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { usePolling } from '@/hooks/usePolling';
 import SaludPredictivaSemaforo from '@/components/dashboard/SaludPredictivaSemaforo';
 import EquiposSinTransmision from '@/components/dashboard/EquiposSinTransmision';
+import EquiposEnWarmup from '@/components/dashboard/EquiposEnWarmup';
 import KpiCards from '@/components/dashboard/KpiCards';
 import EquipoGrid from '@/components/dashboard/EquipoGrid';
 import RiskDistributionChart from '@/components/dashboard/RiskDistributionChart';
@@ -16,9 +17,13 @@ import EquiposReincidentes from '@/components/dashboard/EquiposReincidentes';
 import { useAuth } from '@/lib/auth';
 import { fetchDashboardData, fetchEquipoLecturas } from '@/lib/api/dashboard';
 import { fetchIncidencias, fetchCalibracionesOps } from '@/lib/api/ops';
-import { fetchHealthStates } from '@/lib/api/healthMonitor';
+import { fetchHealthStates, fetchTrainingState } from '@/lib/api/healthMonitor';
 import { HEALTH_STATE_CONFIG } from '@/types/healthMonitor';
-import type { HealthDeviceState, HealthState } from '@/types/healthMonitor';
+import type {
+  HealthDeviceState,
+  HealthState,
+  TrainingStateItem,
+} from '@/types/healthMonitor';
 import type {
   DashboardData,
   KpiData,
@@ -87,10 +92,13 @@ function computeHealthDistribution(
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  // Coordinador/admin gestionan problemas (crear a partir de reincidentes).
+  // Coordinador/admin gestionan problemas (crear a partir de reincidentes) y
+  // ven el widget de warm-up (C11).
   const canCrearProblema =
     user?.rol === 'coordinador' || user?.rol === 'administrador';
+  const canVerWarmup = canCrearProblema;
   const [dashData, setDashData] = useState<DashboardData | null>(null);
+  const [warmupItems, setWarmupItems] = useState<TrainingStateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -158,6 +166,11 @@ export default function DashboardPage() {
           ),
         ),
       )
+      .catch(() => {});
+
+    // C11 warm-up: sólo estaciones no entrenadas (default). Tolerante a fallos.
+    fetchTrainingState()
+      .then((res) => setWarmupItems(res.items))
       .catch(() => {});
   }, []);
 
@@ -237,6 +250,8 @@ export default function DashboardPage() {
       <SaludPredictivaSemaforo states={healthStates} />
 
       <EquiposSinTransmision states={healthStates} />
+
+      {canVerWarmup && <EquiposEnWarmup items={warmupItems} />}
 
       <KpiCards data={kpis} />
 

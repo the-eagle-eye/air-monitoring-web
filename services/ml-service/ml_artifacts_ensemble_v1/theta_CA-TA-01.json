@@ -1,0 +1,13 @@
+{
+  "station_id": "CA-TA-01",
+  "theta": 0.7881422770172042,
+  "theta_train": 0.7881422770172042,
+  "theta_source": "trained_retrain",
+  "theta_percentile": 95,
+  "model_version": "vigishield-ensemble-v1-CA-TA-01-20260717T055257Z",
+  "rows_train": 20771,
+  "rows_normal": 20771,
+  "median_hsp": 70.91666666666667,
+  "trained_at": "2026-07-17T05:52:57.549746+00:00",
+  "training_source": "retrain"
+}

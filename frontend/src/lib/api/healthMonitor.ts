@@ -3,6 +3,7 @@ import type {
   HealthDeviceState,
   HealthEvaluateResponse,
   HealthReadingsResponse,
+  TrainingStateResponse,
 } from '@/types/healthMonitor';
 
 // Serie histórica de recon_error + θ para el gráfico de tendencia de salud.
@@ -41,6 +42,18 @@ export async function evaluateReading(reading: {
     method: 'POST',
     body: JSON.stringify(reading),
   });
+}
+
+// Progreso de warm-up del auto-training (C11). Por defecto sólo lista las que
+// aún no están entrenadas (widget del dashboard). `all=true` incluye entrenadas.
+export async function fetchTrainingState(
+  all = false,
+): Promise<TrainingStateResponse> {
+  const suffix = all ? '?all=true' : '';
+  return apiFetch<TrainingStateResponse>(
+    `/api/v1/health-monitor/training-state${suffix}`,
+    { service: 'gateway' },
+  );
 }
 
 // Estado de varios equipos (para el semáforo agregado). Tolera 404 por equipo

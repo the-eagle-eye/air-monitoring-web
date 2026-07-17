@@ -47,6 +47,27 @@ export interface HealthDeviceState {
   updated_at: string;
 }
 
+// C11 — máquina de warm-up del auto-training del ensemble
+// (docs/spec-auto-training-onboarding.md §4.1).
+export type TrainingState =
+  'nueva' | 'recolectando' | 'entrenando' | 'entrenado' | 'error';
+
+export interface TrainingStateItem {
+  device_id: string;
+  state: TrainingState;
+  readings_valid_count: number;
+  target: number;
+  eta_days: number | null;
+  attempts: number;
+  last_error: string | null;
+  model_version: string | null;
+  updated_at: string;
+}
+
+export interface TrainingStateResponse {
+  items: TrainingStateItem[];
+}
+
 // Config visual por estado (colores del semáforo de Salud Predictiva).
 export const HEALTH_STATE_CONFIG: Record<
   HealthState,
