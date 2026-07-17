@@ -14,15 +14,17 @@ Artefactos por estación en ml_artifacts_ensemble_v1/ (Fase 2). θ recalibrable
 import json
 import logging
 import os
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 import httpx
 import joblib
 import numpy as np
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session
 
 from app.models.health_state import HealthDeviceState, HealthReading
+from app.models.station_training import StationTrainingState
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +105,10 @@ def _maybe_trigger_incidencia(db: Session, device_id: str, raw_state: str,
         )
 
 
+# sentinela para distinguir "no cacheado" de "cacheado como None" en get()
+_MISS = object()
+
+
 class EnsembleRegistry:
     """Carga perezosa de los artefactos por estación."""
 
@@ -123,8 +129,12 @@ class EnsembleRegistry:
         return os.path.exists(os.path.join(self.art_dir, f"scaler_{station_id}.pkl"))
 
     def get(self, station_id):
-        if station_id in self._cache:
-            return self._cache[station_id]
+        # G5 fix (spec §6): si el cache tiene None, re-chequear disco antes de
+        # devolver — el trainer de warm-up puede haber escrito artefactos frescos
+        # entre lecturas sin llamar a invalidate(). El stat es barato.
+        cached = self._cache.get(station_id, _MISS)
+        if cached is not _MISS and cached is not None:
+            return cached
         if not self.available(station_id):
             self._cache[station_id] = None
             return None
@@ -132,8 +142,15 @@ class EnsembleRegistry:
         ae = joblib.load(os.path.join(self.art_dir, f"autoencoder_{station_id}.pkl"))
         iforest = joblib.load(os.path.join(self.art_dir, f"iforest_{station_id}.pkl"))
         with open(os.path.join(self.art_dir, f"theta_{station_id}.json")) as f:
-            theta = json.load(f)["theta"]
-        bundle = {"scaler": scaler, "ae": ae, "iforest": iforest, "theta": theta}
+            theta_meta = json.load(f)
+        theta = theta_meta["theta"]
+        # G7 provenance: propagar model_version del bundle (retrocompat: theta
+        # antiguos no lo tienen -> fallback al constant).
+        model_version = theta_meta.get("model_version", MODEL_VERSION)
+        bundle = {
+            "scaler": scaler, "ae": ae, "iforest": iforest,
+            "theta": theta, "model_version": model_version,
+        }
         self._cache[station_id] = bundle
         return bundle
 
@@ -236,6 +253,11 @@ def evaluate(db: Session, req) -> dict:
 
     bundle = registry.get(station)
     theta = bundle["theta"] if bundle else None
+    # G7 provenance: usar el model_version del bundle cargado. Fallback al
+    # constant cuando no hay bundle (SIN_DATOS) o para theta antiguos.
+    model_version_used = (
+        bundle.get("model_version", MODEL_VERSION) if bundle else MODEL_VERSION
+    )
     mult = registry.config["severity_multipliers"]
 
     # hours_since_prev online (actualiza memoria)
@@ -280,7 +302,7 @@ def evaluate(db: Session, req) -> dict:
         device_id=station, reading_timestamp=ts, recon_error=recon_error,
         theta=theta, if_anomaly=if_anomaly, and_alert=and_alert,
         severity=severity, health_state=published, raw_state=raw_state,
-        hours_since_prev=hsp, model_version=MODEL_VERSION,
+        hours_since_prev=hsp, model_version=model_version_used,
     ))
     db.commit()
 
@@ -289,6 +311,10 @@ def evaluate(db: Session, req) -> dict:
     # Se cuenta sobre raw_state (severidad real de la lectura), no el publicado.
     if and_alert and raw_state in ALERT_THRESHOLDS:
         _maybe_trigger_incidencia(db, station, raw_state, ts)
+
+    # C11 auto-training: acumular contador de lecturas válidas y disparar el
+    # trainer si cruza WARMUP_MIN_ROWS (fire-and-forget, spec §4.2).
+    _maybe_trigger_training(db, station, int(req.valido))
 
     return {
         "device_id": station,
@@ -300,8 +326,95 @@ def evaluate(db: Session, req) -> dict:
         "severity": severity,
         "health_state": published,
         "hours_since_prev": hsp,
-        "model_version": MODEL_VERSION,
+        "model_version": model_version_used,
     }
+
+
+# ---------------------------------------------------------------------------
+# C11 — Auto-training trigger (spec §4.2)
+# ---------------------------------------------------------------------------
+_training_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="warmup")
+
+
+def _training_trigger_enabled() -> bool:
+    # Se lee dinámicamente para que tests puedan alternarlo sin re-import.
+    return os.environ.get("TRAINING_TRIGGER_ENABLED", "1") == "1"
+
+
+def _run_training_job(device_id: str) -> None:
+    """Corre en el thread pool. Abre su propia SessionLocal (no reutiliza la
+    del request). Loguea excepciones y las persiste vía training_service."""
+    from app.database import SessionLocal
+    from app.services import training_service
+
+    db = SessionLocal()
+    try:
+        training_service.train_station(db, device_id, source="warmup")
+    except Exception:
+        logger.exception("Warm-up training crashed for %s", device_id)
+    finally:
+        db.close()
+
+
+def _maybe_trigger_training(db: Session, device_id: str, valido_flag: int) -> None:
+    """Actualiza station_training_state y dispara el job de warm-up si el conteo
+    de lecturas válidas cruza WARMUP_MIN_ROWS. Anti-race: la transición a
+    'entrenando' se hace con UPDATE ... WHERE state='recolectando' y sólo el
+    ganador de la carrera hace el submit al executor."""
+    from app.services import training_service
+
+    row = db.get(StationTrainingState, device_id)
+    if row is None:
+        row = StationTrainingState(
+            device_id=device_id, state="nueva", readings_valid_count=0
+        )
+        db.add(row)
+        db.commit()
+        row = db.get(StationTrainingState, device_id)
+
+    # Estados que no acumulan ni disparan (entrenando/entrenado/error)
+    if row.state in ("entrenando", "entrenado"):
+        return
+    # 'error' se re-intenta implícitamente si sigue llegando data válida
+    if valido_flag != 1:
+        return
+
+    if row.state == "nueva":
+        row.state = "recolectando"
+        row.readings_valid_count = 1
+        row.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return
+
+    # state ∈ {'recolectando', 'error'}
+    threshold = training_service.WARMUP_MIN_ROWS
+    new_count = row.readings_valid_count + 1
+    if new_count < threshold:
+        row.readings_valid_count = new_count
+        row.updated_at = datetime.now(timezone.utc)
+        db.commit()
+        return
+
+    # Cruzamos el umbral: transición atómica condicional. Sólo un worker gana.
+    now = datetime.now(timezone.utc)
+    prev_state = row.state
+    result = db.execute(
+        update(StationTrainingState)
+        .where(
+            StationTrainingState.device_id == device_id,
+            StationTrainingState.state == prev_state,
+        )
+        .values(
+            state="entrenando",
+            readings_valid_count=new_count,
+            training_started_at=now,
+            updated_at=now,
+        )
+    )
+    db.commit()
+
+    if result.rowcount == 1 and _training_trigger_enabled():
+        _training_executor.submit(_run_training_job, device_id)
 
 
 def get_device_state(db: Session, device_id: str):

@@ -17,6 +17,8 @@ from fastapi.testclient import TestClient
 from shared.models.base import Base
 from app.models.health_state import HealthReading, HealthDeviceState  # noqa: F401
 from app.models.model_metric import ModelMetric  # noqa: F401
+from app.models.station_training import StationTrainingState  # noqa: F401
+from app.models.iot_view import EquipoView, LecturaIoTView  # noqa: F401
 from app.main import app
 from app.database import get_db
 

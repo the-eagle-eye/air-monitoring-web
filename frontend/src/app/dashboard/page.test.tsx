@@ -39,6 +39,7 @@ beforeEach(() => {
   mD.fetchEquipoLecturas.mockResolvedValue([]);
   mH.fetchHealthStates.mockResolvedValue({});
   mH.fetchHealthReadings.mockResolvedValue({ device_id: 'T-1', points: [] });
+  mH.fetchTrainingState.mockResolvedValue({ items: [] });
   mO.fetchIncidencias.mockResolvedValue({
     items: [],
     total: 0,
