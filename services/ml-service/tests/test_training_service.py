@@ -267,3 +267,111 @@ class TestInputValidation:
     def test_rejects_unknown_source(self, db_session):
         with pytest.raises(ValueError, match="source"):
             ts.train_station(db_session, "CA-X", source="unknown")
+
+
+class TestS3WriteThrough:
+    """`_maybe_upload_to_s3` sube artefactos a S3 tras la promoción local.
+    Best-effort: fallos de S3 NO revierten los archivos locales."""
+
+    @pytest.fixture
+    def fake_s3(self, monkeypatch):
+        """Inyecta un boto3 falso en sys.modules; devuelve la lista de llamadas
+        upload_file registradas para aserciones."""
+        import sys
+
+        calls: list[tuple[str, str, str]] = []
+
+        class _FakeS3:
+            def upload_file(self, path, bucket, key):
+                calls.append((path, bucket, key))
+
+        class _FakeBoto3:
+            @staticmethod
+            def client(service):
+                assert service == "s3", f"esperado 's3', vino {service!r}"
+                return _FakeS3()
+
+        monkeypatch.setitem(sys.modules, "boto3", _FakeBoto3())
+        return calls
+
+    def test_disabled_when_bucket_env_unset(
+        self, db_session, art_dir, small_thresholds, fake_s3, monkeypatch
+    ):
+        monkeypatch.delenv("ML_ARTIFACTS_S3_BUCKET", raising=False)
+        equipo = _seed_equipo(db_session, "CA-NO-S3")
+        _seed_readings(db_session, equipo.id, n=120)
+
+        result = ts.train_station(db_session, "CA-NO-S3", source="warmup")
+
+        assert result["action"] == "trained"
+        assert fake_s3 == [], "no debería llamar S3 si el env no está definido"
+
+    def test_uploads_all_four_artifacts_when_bucket_set(
+        self, db_session, art_dir, small_thresholds, fake_s3, monkeypatch
+    ):
+        monkeypatch.setenv("ML_ARTIFACTS_S3_BUCKET", "airmon-test-bucket")
+        equipo = _seed_equipo(db_session, "CA-S3-01")
+        _seed_readings(db_session, equipo.id, n=120)
+
+        result = ts.train_station(db_session, "CA-S3-01", source="warmup")
+        assert result["action"] == "trained"
+
+        assert len(fake_s3) == 4, f"esperado 4 uploads, vino {len(fake_s3)}"
+        keys = sorted(k for _, _, k in fake_s3)
+        assert keys == sorted([
+            "ensemble/scaler_CA-S3-01.pkl",
+            "ensemble/autoencoder_CA-S3-01.pkl",
+            "ensemble/iforest_CA-S3-01.pkl",
+            "ensemble/theta_CA-S3-01.json",
+        ])
+        buckets = {b for _, b, _ in fake_s3}
+        assert buckets == {"airmon-test-bucket"}
+
+    def test_honors_custom_prefix(
+        self, db_session, art_dir, small_thresholds, fake_s3, monkeypatch
+    ):
+        monkeypatch.setenv("ML_ARTIFACTS_S3_BUCKET", "b")
+        monkeypatch.setenv("ML_ARTIFACTS_S3_PREFIX", "custom/nested")
+        equipo = _seed_equipo(db_session, "CA-PFX-01")
+        _seed_readings(db_session, equipo.id, n=120)
+
+        ts.train_station(db_session, "CA-PFX-01", source="warmup")
+
+        assert all(k.startswith("custom/nested/") for _, _, k in fake_s3)
+
+    def test_upload_failure_does_not_fail_training(
+        self, db_session, art_dir, small_thresholds, monkeypatch
+    ):
+        """Si S3 revienta, el training completa igual — los artefactos locales
+        ya se escribieron atómicamente. Sólo se emite un WARNING."""
+        import sys
+
+        class _BrokenS3:
+            def upload_file(self, path, bucket, key):
+                raise RuntimeError("simulated S3 outage")
+
+        class _FakeBoto3:
+            @staticmethod
+            def client(_):
+                return _BrokenS3()
+
+        monkeypatch.setitem(sys.modules, "boto3", _FakeBoto3())
+        monkeypatch.setenv("ML_ARTIFACTS_S3_BUCKET", "b")
+
+        equipo = _seed_equipo(db_session, "CA-OUTAGE")
+        _seed_readings(db_session, equipo.id, n=120)
+
+        result = ts.train_station(db_session, "CA-OUTAGE", source="warmup")
+
+        assert result["action"] == "trained"
+        # Artefactos locales SIGUEN estando (write-through no rompe atomicidad).
+        for name in (
+            "scaler_CA-OUTAGE.pkl",
+            "autoencoder_CA-OUTAGE.pkl",
+            "iforest_CA-OUTAGE.pkl",
+            "theta_CA-OUTAGE.json",
+        ):
+            assert os.path.exists(os.path.join(art_dir, name)), name
+
+        row = db_session.get(StationTrainingState, "CA-OUTAGE")
+        assert row.state == "entrenado"

@@ -213,7 +213,10 @@ def _train_bundle(df: pd.DataFrame) -> dict:
 
 def _write_artifacts_atomic(art_dir: str, sid: str, bundle: dict, meta: dict) -> None:
     """Escribe scaler/AE/IF/theta como `.tmp` y luego `os.replace` atómico.
-    Ante excepción: limpia .tmp huérfanos y NO promueve nada (spec §4.3)."""
+    Ante excepción: limpia .tmp huérfanos y NO promueve nada (spec §4.3).
+
+    Después de la promoción local, sube best-effort a S3 (write-through) para
+    durabilidad ante reemplazo de la EC2 en AWS. Ver `_maybe_upload_to_s3`."""
     os.makedirs(art_dir, exist_ok=True)
     # Registrar tmp path ANTES de escribir, para que la limpieza atrape hasta el
     # archivo que se estaba escribiendo si `joblib.dump` / `json.dump` explotan.
@@ -244,6 +247,44 @@ def _write_artifacts_atomic(art_dir: str, sid: str, bundle: dict, meta: dict) ->
             except OSError:
                 pass
         raise
+
+    _maybe_upload_to_s3(sid, [final for _, final in pending])
+
+
+def _maybe_upload_to_s3(sid: str, files: list[str]) -> None:
+    """Write-through de artefactos a S3 tras la escritura local (best-effort).
+
+    Activado por env `ML_ARTIFACTS_S3_BUCKET`. Un fallo NO revierte la
+    escritura local — el disco de la EC2 sigue siendo válido y la próxima
+    lectura del registry ve el bundle nuevo (fix G5). Se pierde durabilidad
+    ante replace de la EC2 en ese caso, pero no coherencia del monitor de salud.
+
+    Prefix por defecto: `ensemble/` (consistente con el `aws s3 sync` del
+    user_data en `infra/terraform/user_data.sh.tftpl`).
+    """
+    bucket = os.environ.get("ML_ARTIFACTS_S3_BUCKET")
+    if not bucket:
+        return
+    prefix = os.environ.get("ML_ARTIFACTS_S3_PREFIX", "ensemble").strip("/")
+    try:
+        import boto3  # dep opcional en local; obligatoria en EC2
+
+        s3 = boto3.client("s3")
+        for path in files:
+            name = os.path.basename(path)
+            key = f"{prefix}/{name}" if prefix else name
+            s3.upload_file(path, bucket, key)
+        logger.info(
+            "s3 write-through OK sid=%s bucket=%s files=%d",
+            sid, bucket, len(files),
+        )
+    except Exception as exc:
+        # No re-raise: los artefactos locales YA son válidos.
+        logger.warning(
+            "s3 write-through failed sid=%s bucket=%s: %s "
+            "(disco local intacto)",
+            sid, bucket, exc,
+        )
 
 
 def _load_previous_theta_train(art_dir: str, sid: str):

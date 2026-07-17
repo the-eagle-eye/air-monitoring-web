@@ -61,9 +61,17 @@ services:
       - ML_SERVICE_URL=http://ml-service:8002
       - OPS_SERVICE_URL=http://ops-service:8003
       - ENSEMBLE_ARTIFACTS_PATH=/app/ml_artifacts_ensemble_v1
+      # C11 auto-training write-through a S3 tras cada training exitoso
+      # (docs/spec-auto-training-onboarding.md §7). Boto3 usa credenciales del
+      # rol IAM de la EC2 automáticamente.
+      - ML_ARTIFACTS_S3_BUCKET=${ML_ARTIFACTS_S3_BUCKET}
+      - ML_ARTIFACTS_S3_PREFIX=ensemble
+      - AWS_REGION=${AWS_REGION:-us-east-1}
     volumes:
-      # artefactos del ensemble (.pkl gitignored): bajados de S3 por el user_data
-      - ./services/ml-service/ml_artifacts_ensemble_v1:/app/ml_artifacts_ensemble_v1:ro
+      # Artefactos del ensemble (.pkl gitignored). Bajados de S3 por user_data
+      # al arrancar; el trainer C11 escribe aquí .pkl/.json nuevos por estación
+      # y luego los sube a S3 (write-through). RW obligatorio para C11.
+      - ./services/ml-service/ml_artifacts_ensemble_v1:/app/ml_artifacts_ensemble_v1
     restart: unless-stopped
 
   ops-service:

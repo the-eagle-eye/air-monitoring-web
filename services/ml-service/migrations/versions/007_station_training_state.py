@@ -70,13 +70,18 @@ def upgrade() -> None:
     # Seed de las 5 estaciones vigentes como 'entrenado'. Sus artefactos existen
     # en ml_artifacts_ensemble_v1/ desde el POC del ensemble; el trigger de
     # warm-up nunca debe volver a entrenarlas (CA-15).
+    # `ON CONFLICT (device_id) DO NOTHING` mantiene la migración idempotente
+    # cuando dos réplicas del ml-service arrancan a la vez (edge case AWS al
+    # replace de la EC2). En SQLite (tests) esta rama no corre — usamos
+    # `Base.metadata.create_all` sin alembic.
     bind = op.get_bind()
     for sid in SEEDED_STATIONS:
         bind.execute(
             sa.text(
                 "INSERT INTO station_training_state "
                 "(device_id, state, readings_valid_count, attempts, updated_at) "
-                "VALUES (:sid, 'entrenado', 0, 0, now())"
+                "VALUES (:sid, 'entrenado', 0, 0, now()) "
+                "ON CONFLICT (device_id) DO NOTHING"
             ),
             {"sid": sid},
         )

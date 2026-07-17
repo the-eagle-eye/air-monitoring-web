@@ -51,7 +51,10 @@ SECRET_KEY=$(get_ssm /airmon/secret_key)
 SMTP_USER=$(get_ssm /airmon/smtp_user)
 SMTP_PASSWORD=$(get_ssm /airmon/smtp_password)
 
-# 6) Componer el entorno para docker-compose.prod.yml
+# 6) Componer el entorno para docker-compose.prod.yml.
+#    ML_ARTIFACTS_S3_BUCKET + AWS_REGION habilitan el write-through de C11
+#    (`training_service._maybe_upload_to_s3`) para durabilidad de los artefactos
+#    entrenados en producción ante un replace de la EC2.
 cat > .env.prod <<ENV
 DATABASE_URL=postgresql://airmon:$${DB_PASSWORD}@$${RDS_HOST}:5432/airmonitoring
 SECRET_KEY=$${SECRET_KEY}
@@ -59,6 +62,8 @@ SMTP_USER=$${SMTP_USER}
 SMTP_PASSWORD=$${SMTP_PASSWORD}
 FRONTEND_URL=http://$${PUBLIC_HOST}:3000
 PUBLIC_API_URL=http://$${PUBLIC_HOST}:8000
+ML_ARTIFACTS_S3_BUCKET=$${S3_BUCKET}
+AWS_REGION=$${REGION}
 ENV
 
 # 7) Levantar el stack (build incluido). Las migraciones alembic corren al
