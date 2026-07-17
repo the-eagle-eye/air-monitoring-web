@@ -22,8 +22,14 @@ resource "aws_iam_role_policy" "ec2" {
     Version = "2012-10-17"
     Statement = [
       {
+        # Read: descarga inicial de artefactos en el user_data (los .pkl + theta_*.json
+        # seed) desde S3 al arrancar la EC2.
+        # Write: write-through de C11 (docs/spec-auto-training-onboarding.md §7) —
+        # `training_service._write_artifacts_atomic` sube el bundle a S3 tras
+        # completar el entrenamiento local, para que estaciones warm-uped en
+        # producción sobrevivan un replace de la EC2.
         Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:ListBucket"]
+        Action   = ["s3:GetObject", "s3:ListBucket", "s3:PutObject"]
         Resource = [aws_s3_bucket.artifacts.arn, "${aws_s3_bucket.artifacts.arn}/*"]
       },
       {
