@@ -1,3 +1,4 @@
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -8,6 +9,12 @@ from app.models import Base  # noqa: F401
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# En producción (AWS RDS) leemos DATABASE_URL del entorno — no del alembic.ini
+# (que tiene el URL de dev hardcodeado, `postgresql://...@db:5432/...`).
+_env_url = os.environ.get("DATABASE_URL")
+if _env_url:
+    config.set_main_option("sqlalchemy.url", _env_url)
 
 target_metadata = Base.metadata
 
