@@ -117,62 +117,71 @@ export default function DashboardPage() {
   const selectedEquipoRef = useRef(selectedEquipo);
   selectedEquipoRef.current = selectedEquipo;
 
-  const loadDashboard = useCallback((silent = false) => {
-    if (!silent) setLoading(true);
-    fetchDashboardData()
-      .then((data) => {
-        setDashData(data);
-        if (!selectedEquipoRef.current && data.equipos.length > 0) {
-          setSelectedEquipo(data.equipos[0].device_id);
-        }
-        setLastUpdated(new Date());
-        // Salud predictiva (ensemble) por equipo — tolerante a fallos por equipo.
-        fetchHealthStates(data.equipos.map((e) => e.device_id))
-          .then(setHealthStates)
-          .catch(() => {});
-      })
-      .catch((err) => {
-        if (!silent) setError(err.message);
-      })
-      .finally(() => {
-        if (!silent) setLoading(false);
-      });
-
-    Promise.all([
-      fetchIncidencias({
-        tipo: 'correctiva',
-        estado: 'pendiente',
-        page_size: 50,
-      }),
-      fetchIncidencias({
-        tipo: 'correctiva',
-        estado: 'en_ejecucion',
-        page_size: 50,
-      }),
-    ])
-      .then(([pend, ejec]) =>
-        setOpenIncidencias([...pend.items, ...ejec.items]),
-      )
-      .catch(() => {});
-
-    fetchCalibracionesOps({ page_size: 100 })
-      .then((res) =>
-        setPendingCalibraciones(
-          res.items.filter(
-            (c) =>
-              !c.fecha_calibracion &&
-              c.incidencia_estado !== 'finalizado' &&
-              c.incidencia_estado !== 'cancelado',
-          ),
-        ),
-      )
-      .catch(() => {});
-
-    // C11 warm-up: sólo estaciones no entrenadas (default). Tolerante a fallos.
+  // C11 warm-up: refresco casi en tiempo real (progreso de lecturas + ETA).
+  // Tolerante a fallos, silencioso.
+  const loadWarmup = useCallback(() => {
     fetchTrainingState()
       .then((res) => setWarmupItems(res.items))
       .catch(() => {});
   }, []);
+
+  const loadDashboard = useCallback(
+    (silent = false) => {
+      if (!silent) setLoading(true);
+      fetchDashboardData()
+        .then((data) => {
+          setDashData(data);
+          if (!selectedEquipoRef.current && data.equipos.length > 0) {
+            setSelectedEquipo(data.equipos[0].device_id);
+          }
+          setLastUpdated(new Date());
+          // Salud predictiva (ensemble) por equipo — tolerante a fallos por equipo.
+          fetchHealthStates(data.equipos.map((e) => e.device_id))
+            .then(setHealthStates)
+            .catch(() => {});
+        })
+        .catch((err) => {
+          if (!silent) setError(err.message);
+        })
+        .finally(() => {
+          if (!silent) setLoading(false);
+        });
+
+      Promise.all([
+        fetchIncidencias({
+          tipo: 'correctiva',
+          estado: 'pendiente',
+          page_size: 50,
+        }),
+        fetchIncidencias({
+          tipo: 'correctiva',
+          estado: 'en_ejecucion',
+          page_size: 50,
+        }),
+      ])
+        .then(([pend, ejec]) =>
+          setOpenIncidencias([...pend.items, ...ejec.items]),
+        )
+        .catch(() => {});
+
+      fetchCalibracionesOps({ page_size: 100 })
+        .then((res) =>
+          setPendingCalibraciones(
+            res.items.filter(
+              (c) =>
+                !c.fecha_calibracion &&
+                c.incidencia_estado !== 'finalizado' &&
+                c.incidencia_estado !== 'cancelado',
+            ),
+          ),
+        )
+        .catch(() => {});
+
+      // C11 warm-up: sólo estaciones no entrenadas (default). Tolerante a fallos.
+      loadWarmup();
+    },
+    [loadWarmup],
+  );
 
   const loadEquipoData = useCallback((silent = false) => {
     const equipo = selectedEquipoRef.current;
@@ -202,6 +211,10 @@ export default function DashboardPage() {
     loadDashboard(true);
     loadEquipoData(true);
   }, 30_000);
+
+  // Refresco en "tiempo real" del panel de warm-up (solo coord/admin lo ven).
+  // Ligero: 1 request al ml-service (/training-state), pausado en background.
+  usePolling(loadWarmup, 3_000, canVerWarmup);
 
   if (loading) {
     return (
